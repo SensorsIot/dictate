@@ -59,6 +59,16 @@ public sealed class DictateConfig
     /// <summary>Report press-to-recording, transcription and cleanup timings after each utterance.</summary>
     public bool ShowTimings { get; set; }
 
+    /// <summary>
+    /// Write a diagnostic log to <c>%LOCALAPPDATA%\dictate\dictate.log</c>:
+    /// lifecycle, timings, outcomes and process counters. Never the dictated
+    /// text — see <see cref="DiagnosticLog"/>.
+    ///
+    /// Off by default, because D-12 chose zero persistence. Turn it on when
+    /// something needs diagnosing from another machine.
+    /// </summary>
+    public bool EnableDiagnosticLog { get; set; }
+
     public LanguageMode Language { get; set; } = LanguageMode.Auto;
 
     /// <summary>ElevenLabs transcription model. Configurable because the Scribe generation moves.</summary>

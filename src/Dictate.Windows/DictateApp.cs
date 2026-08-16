@@ -30,16 +30,19 @@ internal sealed class DictateApp : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _recentMenu;
     private readonly RecentUtterances _recent = new(RecentCapacity);
+    private readonly DiagnosticLog _log;
+    private int _utteranceCount;
 
     private SessionState _state = SessionState.Idle;
     private IntPtr _pinnedWindow;
     private long _pressedAtTicks;
     private TimeSpan _startLatency;
 
-    internal DictateApp(DictateConfig config, DictationPipeline pipeline)
+    internal DictateApp(DictateConfig config, DictationPipeline pipeline, DiagnosticLog log)
     {
         _config = config;
         _pipeline = pipeline;
+        _log = log;
 
         _icons = new TrayIcons();
         _overlay = new Overlay();
@@ -72,6 +75,11 @@ internal sealed class DictateApp : ApplicationContext
         _hotkey = new HotkeyListener(config.HotkeyVirtualKey, config.SuppressHotkey);
         _hotkey.Pressed += OnHotkeyPressed;
         _hotkey.Released += OnHotkeyReleased;
+
+        _log.Event("started",
+            ("hotkey", $"0x{config.HotkeyVirtualKey:X2}"),
+            ("keepMicOpen", config.KeepMicrophoneOpen),
+            ("cleanup", config.CleanupModel));
     }
 
     /// <summary>
@@ -169,6 +177,8 @@ internal sealed class DictateApp : ApplicationContext
 
         SetState(SessionState.Recording);
         _feedback.Start();
+
+        _log.Event("recording.start", ("pressToCapture", _startLatency));
     }
 
     private async void EndSession()
@@ -209,6 +219,9 @@ internal sealed class DictateApp : ApplicationContext
 
         SetState(SessionState.Idle);
 
+        _utteranceCount++;
+        LogOutcome(utterance, held, pcm.Length, target);
+
         try
         {
             Deliver(utterance, target);
@@ -222,6 +235,50 @@ internal sealed class DictateApp : ApplicationContext
             _feedback.Error();
             Notify("Delivery failed", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Records the shape of an utterance and the process counters alongside it.
+    /// Length rather than text: knowing an utterance was 84 characters is enough
+    /// to correlate with a delivery problem, and keeps FR-17.1 intact.
+    /// </summary>
+    private void LogOutcome(Utterance utterance, TimeSpan held, int pcmBytes, TargetContext target)
+    {
+        if (!_log.IsEnabled)
+        {
+            return;
+        }
+
+        long workingSet = 0;
+        int handles = 0, threads = 0;
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            self.Refresh();
+            workingSet = self.WorkingSet64 / (1024 * 1024);
+            handles = self.HandleCount;
+            threads = self.Threads.Count;
+        }
+        catch (Exception)
+        {
+            // Counters are diagnostics; never let them break the session.
+        }
+
+        _log.Event("utterance",
+            ("n", _utteranceCount),
+            ("held", held),
+            ("audioMB", Math.Round(pcmBytes / 1024.0 / 1024.0, 2)),
+            ("status", utterance.Status),
+            ("chars", utterance.Text.Length),
+            ("lang", utterance.LanguageCode),
+            ("target", target.ProcessName),
+            ("console", target.IsConsole),
+            ("transcribe", utterance.TranscribeTime),
+            ("cleanup", utterance.CleanupTime),
+            ("error", utterance.Error),
+            ("wsMB", workingSet),
+            ("handles", handles),
+            ("threads", threads));
     }
 
     private void OnRecordingLimitReached()
@@ -273,6 +330,7 @@ internal sealed class DictateApp : ApplicationContext
         // FR-6.2: the window that had focus at press time, or nothing.
         if (WindowInspector.Foreground() != _pinnedWindow)
         {
+            _log.Event("delivery", ("method", "clipboard"), ("reason", "focus-changed"));
             ToClipboard(utterance.Text, "Focus changed", "The text is on the clipboard — press Ctrl+V.");
             return;
         }
@@ -287,9 +345,11 @@ internal sealed class DictateApp : ApplicationContext
         try
         {
             TextInjector.Type(typed, _config.InjectionChunkSize, _config.InjectionChunkDelayMs);
+            _log.Event("delivery", ("method", "typed"), ("chars", typed.Length));
         }
         catch (Exception ex)
         {
+            _log.Event("delivery.failed", ("error", ex.Message));
             ToClipboard(utterance.Text, "Could not type the text", ex.Message);
         }
     }
@@ -357,6 +417,7 @@ internal sealed class DictateApp : ApplicationContext
 
     private void Quit()
     {
+        _log.Event("quit", ("reason", "tray-menu"), ("utterances", _utteranceCount));
         _tray.Visible = false;
         ExitThread();
     }

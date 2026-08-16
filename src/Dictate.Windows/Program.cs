@@ -70,9 +70,24 @@ internal static class Program
 
         var pipeline = new DictationPipeline(transcriber, cleaner, config);
 
+        var log = DiagnosticLog.Disabled;
+        if (config.EnableDiagnosticLog)
+        {
+            try
+            {
+                log = DiagnosticLog.OpenFile(Paths.LogFile);
+            }
+            catch (Exception ex)
+            {
+                // A log that cannot be opened is not a reason to refuse to run.
+                MessageBox.Show($"Diagnostic log could not be opened, continuing without it:\n\n{ex.Message}",
+                    "dictate", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         try
         {
-            using var app = new DictateApp(config, pipeline);
+            using var app = new DictateApp(config, pipeline, log);
             Application.Run(app);
         }
         catch (Exception ex)
@@ -82,6 +97,7 @@ internal static class Program
         }
         finally
         {
+            log.Dispose();
             http.Dispose();
         }
 
