@@ -319,13 +319,6 @@ internal sealed class DictateApp : ApplicationContext
             // so an unusually rough sentence is explained rather than puzzling.
             Notify("Delivered without cleanup", utterance.Error ?? "Cleanup failed.");
         }
-        else if (_config.ShowTimings)
-        {
-            Notify("Timings",
-                $"press→recording {_startLatency.TotalMilliseconds:0} ms · " +
-                $"transcribe {utterance.TranscribeTime.TotalMilliseconds:0} ms · " +
-                $"cleanup {utterance.CleanupTime.TotalMilliseconds:0} ms");
-        }
 
         // Before delivery, not after: if typing throws, or lands somewhere the
         // user did not intend, the text is already recoverable with Ctrl+V.

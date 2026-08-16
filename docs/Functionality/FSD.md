@@ -436,7 +436,19 @@ and query shall yield an empty descriptor, not an exception.
 quit, settings and recent-utterance recovery.
 
 **FR-14.2** [Should] `[user]` An always-on-top overlay shall show *recording* and
-*transcribing*, and shall be suppressible by configuration.
+*transcribing* at a fixed screen position, and shall be suppressible by
+configuration.
+
+> Default lower right of the main screen, above the taskbar. A fixed corner is
+> somewhere the user can learn to glance at; an indicator that follows the
+> cursor is never twice in the same place.
+
+**FR-14.5** [Must] `[user]` Notifications shall be raised only when the user
+needs to act or something went wrong.
+
+> Per-utterance status popups were tried during development and removed: a
+> balloon after every successful dictation is noise, and noise trains people to
+> ignore the balloons that matter. Routine timings belong in the diagnostic log.
 
 **FR-14.3** [Should] `[user]` Distinct sounds shall mark start, stop and error,
 and shall be suppressible by configuration.
@@ -581,7 +593,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `SilenceThreshold` | int | `200` | FR-9.3 |
 | `KeepMicrophoneOpen` | bool | `false` | FR-9.2 |
 | `EnableDiagnosticLog` | bool | `false` | — |
-| `ShowTimings` | bool | `false` | — |
+| `OverlayPosition` | enum | `BottomRight` | FR-14.2 |
 | `InjectionChunkSize` | int | `200` | FR-12.3 |
 | `InjectionChunkDelayMs` | int | `0` | FR-12.3 |
 | `PlaySounds` | bool | `true` | FR-14.3 |

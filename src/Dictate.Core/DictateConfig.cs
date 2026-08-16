@@ -67,9 +67,6 @@ public sealed class DictateConfig
     /// </summary>
     public bool AlwaysCopyToClipboard { get; set; } = true;
 
-    /// <summary>Report press-to-recording, transcription and cleanup timings after each utterance.</summary>
-    public bool ShowTimings { get; set; }
-
     /// <summary>
     /// Write a diagnostic log to <c>%LOCALAPPDATA%\dictate\dictate.log</c>:
     /// lifecycle, timings, outcomes and process counters. Never the dictated
