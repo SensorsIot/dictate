@@ -1,0 +1,15 @@
+# Claude Code state (credentials live here — never commit)
+.claude-data/
+.claude/settings.local.json
+
+# .NET build output
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+
+# Local config / scratch
+*.local.json
+scratch/
