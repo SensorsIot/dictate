@@ -47,7 +47,7 @@ tests:
     verifies: [FR-6.4]
     must_not: any \r or \n survives into text bound for a console
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
     note: >
       The highest-consequence test in the suite. A newline typed into a shell is
       Enter, and Enter runs whatever is on the line.
@@ -60,7 +60,7 @@ tests:
     file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
     verifies: [FR-6.4]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-03
     name: Console classification by process name, class and user list
@@ -70,7 +70,7 @@ tests:
     file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
     verifies: [FR-6.5]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
     gap: >
       Covers the process-name and user-list arms only. The ConsoleWindowClass arm
       lives in Dictate.Windows and is unreachable from the host tier — see D-05.
@@ -84,7 +84,7 @@ tests:
     verifies: [FR-7.1]
     must_not: the utterance is dropped, or an exception escapes the pipeline
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-05
     name: Empty cleanup output is a failure, not a deletion
@@ -94,7 +94,7 @@ tests:
     file: tests/Dictate.Core.Tests/PipelineTests.cs
     verifies: [FR-7.1]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-06
     name: Transcription failure delivers nothing and reports why
@@ -104,7 +104,7 @@ tests:
     file: tests/Dictate.Core.Tests/PipelineTests.cs
     verifies: [FR-7.2, FR-7.4]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-07
     name: Silence ends the session without text
@@ -114,7 +114,7 @@ tests:
     file: tests/Dictate.Core.Tests/PipelineTests.cs
     verifies: [FR-7.3]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-08
     name: Empty audio never reaches the network
@@ -125,7 +125,7 @@ tests:
     verifies: [FR-5.2]
     must_not: a billable request for an utterance with no audio
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-09
     name: Pinned language and target context reach their stages
@@ -135,7 +135,7 @@ tests:
     file: tests/Dictate.Core.Tests/PipelineTests.cs
     verifies: [FR-10.3, FR-11.7]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-10
     name: WAV header declares 16 kHz mono 16-bit and correct sizes
@@ -145,7 +145,7 @@ tests:
     file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
     verifies: [FR-9.1]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-11
     name: Scribe response parsing extracts text and language, rejects malformed
@@ -155,7 +155,7 @@ tests:
     file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
     verifies: [FR-10.5]
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: H-12
     name: Cleanup prompt forbids translating and answering, and carries vocabulary
@@ -166,7 +166,7 @@ tests:
     verifies: [FR-11.4, FR-11.5, FR-11.6]
     must_not: the no-translation clause is absent
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
     note: >
       Verifies the prompt says it, not that the model obeys it. Obedience is
       D-03's risk and is checked at the desktop tier.
@@ -210,7 +210,7 @@ tests:
     verifies: [FR-20.1, FR-20.3]
     must_not: a Windows-only dependency reaches Dictate.Core
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 31955257714, 2026-08-16
 
   - id: C-02
     name: Tagged build publishes a self-contained single-file exe
@@ -220,7 +220,7 @@ tests:
     file: .github/workflows/release.yml
     verifies: [FR-20.2]
     status: implemented
-    last_result: never_run
+    last_result: never_run   # no tag has been pushed yet
 
   # ---- desktop tier: all designed, none executed ------------------------------
 
@@ -375,10 +375,20 @@ tests:
 
 # ---- honest position --------------------------------------------------------
 #
-# 12 host tests implemented, 3 designed. 2 CI checks implemented.
-# 15 desktop tests designed, 0 implemented, 0 executed.
-# 1 workflow, blocked on O-01.
+# As of run 31955257714 (2026-08-16), 41 assertions across 12 host tests pass on
+# ubuntu-latest, and the whole solution — including the Windows head — compiles.
 #
-# Zero requirements are verified: nothing has been executed yet. Every entry
-# above is at "test designed" or "test implemented" on the lifecycle. The first
-# CI run moves the host and ci tiers forward; the desktop tier waits on P2.
+#   host      12 implemented, all passing · 3 designed
+#   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
+#   desktop   15 designed, 0 implemented, 0 executed
+#   workflow   1, blocked on O-01
+#
+# What that does and does not mean. Verified: the pure logic — sanitisation,
+# degradation, WAV framing, response parsing, prompt construction — plus the fact
+# that Dictate.Core carries no Windows dependency.
+#
+# NOT verified, and this is most of the product: no keystroke has ever been
+# synthesised, no microphone opened, no hotkey pressed, and neither ElevenLabs
+# nor Anthropic has been called with a real key. Every requirement resting on
+# those sits at "test designed". The desktop tier is where they get discharged,
+# and it needs the Windows machine and a human.
