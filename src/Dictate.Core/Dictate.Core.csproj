@@ -11,4 +11,10 @@
     <PackageReference Include="Anthropic" Version="12.9.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- ScribeTranscriber.Parse is internal: it is a pure function worth testing
+         directly, but not worth widening the public surface for. -->
+    <InternalsVisibleTo Include="Dictate.Core.Tests" />
+  </ItemGroup>
+
 </Project>
