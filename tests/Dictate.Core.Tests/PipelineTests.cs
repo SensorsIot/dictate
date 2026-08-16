@@ -5,7 +5,22 @@ namespace Dictate.Core.Tests;
 
 public class PipelineTests
 {
-    private static readonly byte[] SomeAudio = new byte[3200]; // 0.1 s of silence
+    /// <summary>0.1 s of audio with a real signal in it, so the silence guard passes.</summary>
+    private static readonly byte[] SomeAudio = Speech(3200);
+
+    private static byte[] Speech(int bytes)
+    {
+        var buffer = new byte[bytes];
+        for (var i = 0; i + 1 < bytes; i += 2)
+        {
+            // Alternating ±8000: crude, but well above the silence threshold.
+            var sample = (short)(i % 4 == 0 ? 8000 : -8000);
+            buffer[i] = (byte)(sample & 0xFF);
+            buffer[i + 1] = (byte)((sample >> 8) & 0xFF);
+        }
+
+        return buffer;
+    }
 
     private sealed class StubTranscriber(Transcript? result = null, Exception? failure = null) : ITranscriber
     {
@@ -98,6 +113,35 @@ public class PipelineTests
 
         Assert.Equal(UtteranceStatus.Failed, result.Status);
         Assert.False(result.HasText);
+    }
+
+    [Fact]
+    public async Task Silent_audio_never_reaches_the_network_and_blames_the_microphone()
+    {
+        // The failure this exists for: a USB interface that returns well-formed
+        // frames of digital silence before its capture stream has spun up.
+        // Uploading those costs money and comes back as "nothing recognised",
+        // which points at the speech model instead of the input device.
+        var transcriber = new StubTranscriber(failure: new Exception("must not be called"));
+        var pipeline = Build(transcriber, new StubCleaner());
+
+        var result = await pipeline.ProcessAsync(new byte[32_000], TargetContext.Unknown);
+
+        Assert.Equal(UtteranceStatus.Failed, result.Status);
+        Assert.Contains("microphone", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("recognised", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task The_silence_threshold_is_configurable()
+    {
+        var quiet = new DictateConfig { SilenceThreshold = 1 };
+        var pipeline = Build(new StubTranscriber(new Transcript("heard it", "en")),
+                             new StubCleaner("Heard it."), quiet);
+
+        var result = await pipeline.ProcessAsync(SomeAudio, TargetContext.Unknown);
+
+        Assert.Equal(UtteranceStatus.Ok, result.Status);
     }
 
     [Fact]

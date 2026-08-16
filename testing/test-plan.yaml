@@ -231,6 +231,12 @@ tests:
     tier: desktop
     verifies: [FR-8.1, FR-8.2]
     status: designed
+    last_result: pass
+    evidence: user-reported, 2026-08-16 — first successful end-to-end dictation
+    evidence_quality: weak
+    gap: >
+      Observed in one application. "From any focused app" needs at least a
+      terminal, an editor and a browser before the clause is discharged.
 
   - id: D-02
     name: A tap shorter than MinimumHoldMs is discarded silently
@@ -364,14 +370,20 @@ tests:
       - the first syllable is missing
       - the text is translated
       - any file is written
-    status: blocked
-    blocked_by: O-01
+    status: implemented        # as a manual procedure
+    last_result: partial
+    evidence: user-reported, 2026-08-16 — "the dictation works"
+    evidence_quality: weak
     note: >
       Deliberately independent of its children. Every atomic test above can pass
       while this one fails — each of those arranges the rig to suit itself,
       whereas this proves that what one step produces is what the next consumes.
-      Blocked until the user confirms the journey in FSD §1.3 is the run they
-      actually expect.
+    steps_demonstrated: 1-7    # launch through text appearing at the caret
+    steps_outstanding:
+      - step 8 — no audio or transcript file written anywhere (FR-17.1).
+        Nobody has looked. A working pipeline says nothing about what it left
+        on disk, and this is the one claim in the README that a user cannot
+        check for themselves.
 
 # ---- honest position --------------------------------------------------------
 #

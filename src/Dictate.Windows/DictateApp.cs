@@ -7,10 +7,13 @@ namespace Dictate.Windows;
 /// The tray application: owns the session state machine of FSD §5 and wires the
 /// hotkey, the recorder, the pipeline and delivery together.
 ///
-/// Everything here runs on the UI thread. The keyboard hook callback is
-/// delivered there because the hook is installed from it, so no marshalling is
-/// needed for state changes; the two network calls are awaited, which yields the
-/// thread and resumes on it.
+/// One rule governs the layout of this class: **nothing slow may run inside the
+/// keyboard hook callback.** A WH_KEYBOARD_LL callback blocks input processing
+/// for the whole system until it returns, and Windows stops calling a hook that
+/// exceeds LowLevelHooksTimeout (300 ms by default). So the hook handlers do
+/// nothing but stamp the time and post to the message queue; the actual work
+/// happens on the next pump, still on the UI thread, with the key event already
+/// released back to the system.
 /// </summary>
 internal sealed class DictateApp : ApplicationContext
 {
@@ -30,8 +33,8 @@ internal sealed class DictateApp : ApplicationContext
 
     private SessionState _state = SessionState.Idle;
     private IntPtr _pinnedWindow;
-    private TargetContext _pinnedTarget = TargetContext.Unknown;
     private long _pressedAtTicks;
+    private TimeSpan _startLatency;
 
     internal DictateApp(DictateConfig config, DictationPipeline pipeline)
     {
@@ -41,7 +44,7 @@ internal sealed class DictateApp : ApplicationContext
         _icons = new TrayIcons();
         _overlay = new Overlay();
         _feedback = new Feedback(config.PlaySounds);
-        _recorder = new AudioRecorder(config.MaximumRecordingSeconds);
+        _recorder = new AudioRecorder(config.MaximumRecordingSeconds, config.KeepMicrophoneOpen);
         _recorder.LimitReached += OnRecordingLimitReached;
 
         _recentMenu = new ToolStripMenuItem("Recent") { Enabled = false };
@@ -62,11 +65,36 @@ internal sealed class DictateApp : ApplicationContext
             ContextMenuStrip = menu,
         };
 
+        PreWarm();
+
         // Installed last: once the hook is live the callbacks can arrive, and
         // they assume everything above exists.
         _hotkey = new HotkeyListener(config.HotkeyVirtualKey, config.SuppressHotkey);
         _hotkey.Pressed += OnHotkeyPressed;
         _hotkey.Released += OnHotkeyReleased;
+    }
+
+    /// <summary>
+    /// Pays every first-use cost at startup rather than on the first press.
+    /// Creating the overlay's window handle, loading winmm and touching the
+    /// process APIs each cost tens to hundreds of milliseconds once, and the
+    /// user is waiting for all of them if they happen on press.
+    /// </summary>
+    private void PreWarm()
+    {
+        _ = _overlay.Handle;          // create the window now, not mid-utterance
+        _recorder.PreWarm();
+
+        try
+        {
+            // First touch of System.Diagnostics.Process is expensive; do it here.
+            using var self = Process.GetCurrentProcess();
+            _ = self.ProcessName;
+        }
+        catch (Exception)
+        {
+            // Diagnostics only.
+        }
     }
 
     // --- state ---------------------------------------------------------------
@@ -88,9 +116,22 @@ internal sealed class DictateApp : ApplicationContext
         }
     }
 
-    // --- hotkey --------------------------------------------------------------
+    // --- hotkey: these two run INSIDE the hook. Keep them trivial. -----------
 
     private void OnHotkeyPressed()
+    {
+        var pressedAt = Stopwatch.GetTimestamp();
+        _overlay.BeginInvoke(() => BeginSession(pressedAt));
+    }
+
+    private void OnHotkeyReleased()
+    {
+        _overlay.BeginInvoke(EndSession);
+    }
+
+    // --- session, on the message loop ---------------------------------------
+
+    private void BeginSession(long pressedAt)
     {
         // FR-5.1: one session at a time. A press while transcribing is ignored
         // rather than queued — two utterances in flight is how audio from one
@@ -107,10 +148,11 @@ internal sealed class DictateApp : ApplicationContext
             return;
         }
 
-        // FR-6.1: the target is recorded now and never re-read.
+        // FR-6.1: the target window is recorded now and never re-read. Only the
+        // handle — resolving it to a process name costs a process lookup, and
+        // that can wait until the pipeline is already running.
         _pinnedWindow = WindowInspector.Foreground();
-        _pinnedTarget = WindowInspector.Describe(_pinnedWindow, _config.ExtraConsoleProcesses);
-        _pressedAtTicks = Stopwatch.GetTimestamp();
+        _pressedAtTicks = pressedAt;
 
         try
         {
@@ -123,11 +165,13 @@ internal sealed class DictateApp : ApplicationContext
             return;
         }
 
+        _startLatency = Stopwatch.GetElapsedTime(pressedAt);
+
         SetState(SessionState.Recording);
         _feedback.Start();
     }
 
-    private async void OnHotkeyReleased()
+    private async void EndSession()
     {
         if (_state != SessionState.Recording)
         {
@@ -147,10 +191,14 @@ internal sealed class DictateApp : ApplicationContext
         SetState(SessionState.Transcribing);
         _feedback.Stop();
 
+        // Deferred from press time: this is a process lookup, and here it runs
+        // while the user is already waiting for the network anyway.
+        var target = WindowInspector.Describe(_pinnedWindow, _config.ExtraConsoleProcesses);
+
         Utterance utterance;
         try
         {
-            utterance = await _pipeline.ProcessAsync(pcm, _pinnedTarget);
+            utterance = await _pipeline.ProcessAsync(pcm, target);
         }
         catch (Exception ex)
         {
@@ -160,7 +208,7 @@ internal sealed class DictateApp : ApplicationContext
         }
 
         SetState(SessionState.Idle);
-        Deliver(utterance);
+        Deliver(utterance, target);
     }
 
     private void OnRecordingLimitReached()
@@ -179,7 +227,7 @@ internal sealed class DictateApp : ApplicationContext
 
     // --- delivery ------------------------------------------------------------
 
-    private void Deliver(Utterance utterance)
+    private void Deliver(Utterance utterance, TargetContext target)
     {
         if (utterance.Status == UtteranceStatus.Failed)
         {
@@ -201,6 +249,13 @@ internal sealed class DictateApp : ApplicationContext
             // so an unusually rough sentence is explained rather than puzzling.
             Notify("Delivered without cleanup", utterance.Error ?? "Cleanup failed.");
         }
+        else if (_config.ShowTimings)
+        {
+            Notify("Timings",
+                $"press→recording {_startLatency.TotalMilliseconds:0} ms · " +
+                $"transcribe {utterance.TranscribeTime.TotalMilliseconds:0} ms · " +
+                $"cleanup {utterance.CleanupTime.TotalMilliseconds:0} ms");
+        }
 
         // FR-6.2: the window that had focus at press time, or nothing.
         if (WindowInspector.Foreground() != _pinnedWindow)
@@ -209,9 +264,16 @@ internal sealed class DictateApp : ApplicationContext
             return;
         }
 
+        // A trailing space so consecutive dictations do not run together. Not
+        // added to the clipboard path, where the user places the text and can
+        // see exactly what they are pasting.
+        var typed = _config.AppendSpaceAfterInsert && !target.IsConsole
+            ? utterance.Text + " "
+            : utterance.Text;
+
         try
         {
-            TextInjector.Type(utterance.Text, _config.InjectionChunkSize, _config.InjectionChunkDelayMs);
+            TextInjector.Type(typed, _config.InjectionChunkSize, _config.InjectionChunkDelayMs);
         }
         catch (Exception ex)
         {
@@ -243,7 +305,13 @@ internal sealed class DictateApp : ApplicationContext
             _recent.RemoveLast();
         }
 
+        foreach (ToolStripItem item in _recentMenu.DropDownItems)
+        {
+            item.Dispose();
+        }
+
         _recentMenu.DropDownItems.Clear();
+
         foreach (var item in _recent)
         {
             var label = item.Text.Length > 60 ? item.Text[..60] + "…" : item.Text;

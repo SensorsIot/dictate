@@ -32,6 +32,33 @@ public sealed class DictateConfig
     /// <summary>Recording stops here regardless, so a stuck key cannot upload the whole afternoon.</summary>
     public int MaximumRecordingSeconds { get; set; } = 120;
 
+    /// <summary>
+    /// Peak amplitude (0–32767) below which a recording counts as silence and is
+    /// not uploaded. 200 is roughly -44 dBFS.
+    /// </summary>
+    public int SilenceThreshold { get; set; } = 200;
+
+    /// <summary>
+    /// Keep the capture device open for the lifetime of the process instead of
+    /// opening it on each press.
+    ///
+    /// Off by default because Windows then reports the microphone as in use the
+    /// whole time dictate runs. Worth turning on for USB interfaces that need a
+    /// moment to spin their capture stream up — a cold open can return valid
+    /// frames of digital silence, which looks exactly like the application being
+    /// broken on the first dictation after a boot or after the interface idles.
+    /// </summary>
+    public bool KeepMicrophoneOpen { get; set; }
+
+    /// <summary>
+    /// Type a space after each utterance, so consecutive dictations do not run
+    /// into each other.
+    /// </summary>
+    public bool AppendSpaceAfterInsert { get; set; } = true;
+
+    /// <summary>Report press-to-recording, transcription and cleanup timings after each utterance.</summary>
+    public bool ShowTimings { get; set; }
+
     public LanguageMode Language { get; set; } = LanguageMode.Auto;
 
     /// <summary>ElevenLabs transcription model. Configurable because the Scribe generation moves.</summary>

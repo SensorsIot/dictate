@@ -29,6 +29,18 @@ public sealed class DictationPipeline
             return Utterance.Fail("No audio was captured.");
         }
 
+        // A device can return well-formed frames that are digital silence — a
+        // USB interface still spinning up, a muted or wrong input. Catching it
+        // here saves a billable upload and, more importantly, says microphone
+        // rather than letting Scribe's empty result imply the speech was at
+        // fault.
+        if (AudioLevel.IsSilent(pcm, _config.SilenceThreshold))
+        {
+            return Utterance.Fail(
+                $"The microphone produced only silence for {Wav.DurationOf(pcm.Length).TotalSeconds:0.0}s. " +
+                "Check the input device, its gain, and that it is not muted.");
+        }
+
         var wav = Wav.FromPcm16(pcm);
 
         Transcript transcript;
