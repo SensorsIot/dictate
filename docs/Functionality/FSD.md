@@ -138,7 +138,7 @@ decoder is an interface.
 **The layer split is not the project split**, and conflating them is the mistake
 to avoid: `Dictate.Core` holds every layer's *platform-free* part, and
 `Dictate.Windows` every layer's *Win32* part. `Dictate.Core` shall not reference
-any Windows-only API (FR-21.3) — that is what keeps L1 and L2 testable on a Linux
+any Windows-only API (FR-20.3) — that is what keeps L1 and L2 testable on a Linux
 runner.
 
 ### 2.4 Test architecture
@@ -172,14 +172,14 @@ exist.
 
 | ID | Risk | Consequence | Mitigation |
 |---|---|---|---|
-| R-01 | Text is typed into the wrong window after an alt-tab | A private sentence lands in the wrong chat, or a shell | FR-7.1 pins the target; FR-7.2 falls back to the clipboard |
-| R-02 | A newline is typed into a terminal | Whatever is on the command line executes | FR-7.4 forbids it structurally, not by prompting |
-| R-03 | Cleanup rewrites meaning or translates | The user sends something they did not say | FR-12.4/FR-12.5; cleanup never sees a request to answer |
-| R-04 | Audio of everything spoken accumulates on disk | A laptop theft becomes a recording leak | FR-18.1: no audio or transcript is ever written |
-| R-05 | An API key is readable on the machine | Account compromise | FR-16.1: DPAPI via Credential Manager, never a file |
-| R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.4 boundary. Per-app chunking (FR-13.3) is the escape hatch |
+| R-01 | Text is typed into the wrong window after an alt-tab | A private sentence lands in the wrong chat, or a shell | FR-6.1 pins the target; FR-6.2 falls back to the clipboard |
+| R-02 | A newline is typed into a terminal | Whatever is on the command line executes | FR-6.4 forbids it structurally, not by prompting |
+| R-03 | Cleanup rewrites meaning or translates | The user sends something they did not say | FR-11.4 forbids translating and FR-11.5 forbids answering; cleanup never sees a request to answer |
+| R-04 | Audio of everything spoken accumulates on disk | A laptop theft becomes a recording leak | FR-17.1: no audio or transcript is ever written |
+| R-05 | An API key is readable on the machine | Account compromise | FR-15.1: DPAPI via Credential Manager, never a file |
+| R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.4 boundary. Per-app chunking (FR-12.3) is the escape hatch |
 | R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted by the user; see the Harness §0. Host tests keep the blast radius small |
-| R-08 | Scribe or Anthropic changes a model identifier | Every utterance fails | FR-11.2/FR-12.2 make both configurable; FR-8.4 surfaces the API's own error text |
+| R-08 | Scribe or Anthropic changes a model identifier | Every utterance fails | FR-10.2 and FR-11.2 make both configurable; FR-7.4 surfaces the API's own error text |
 
 ### 4.1 Explicitly out of scope
 
