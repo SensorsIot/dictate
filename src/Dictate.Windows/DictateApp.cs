@@ -29,7 +29,7 @@ internal sealed class DictateApp : ApplicationContext
     private readonly TrayIcons _icons;
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _recentMenu;
-    private readonly LinkedList<Utterance> _recent = new();
+    private readonly RecentUtterances _recent = new(RecentCapacity);
 
     private SessionState _state = SessionState.Idle;
     private IntPtr _pinnedWindow;
@@ -208,7 +208,20 @@ internal sealed class DictateApp : ApplicationContext
         }
 
         SetState(SessionState.Idle);
-        Deliver(utterance, target);
+
+        try
+        {
+            Deliver(utterance, target);
+        }
+        catch (Exception ex)
+        {
+            // This method is async void: an escaping exception is posted to the
+            // UI thread and takes the process down with it. A bug in delivery
+            // should cost one utterance, not the running session — the user has
+            // no other way to get the text back.
+            _feedback.Error();
+            Notify("Delivery failed", ex.Message);
+        }
     }
 
     private void OnRecordingLimitReached()
@@ -299,20 +312,20 @@ internal sealed class DictateApp : ApplicationContext
 
     private void Remember(Utterance utterance)
     {
-        _recent.AddFirst(utterance);
-        while (_recent.Count > RecentCapacity)
-        {
-            _recent.RemoveLast();
-        }
+        _recent.Add(utterance);
 
-        foreach (ToolStripItem item in _recentMenu.DropDownItems)
+        // Snapshot, detach, then dispose — in that order. ToolStripItem.Dispose
+        // removes the item from its parent's DropDownItems, so disposing while
+        // enumerating that collection modifies it mid-enumeration and throws.
+        var previous = _recentMenu.DropDownItems.Cast<ToolStripItem>().ToArray();
+        _recentMenu.DropDownItems.Clear();
+
+        foreach (var item in previous)
         {
             item.Dispose();
         }
 
-        _recentMenu.DropDownItems.Clear();
-
-        foreach (var item in _recent)
+        foreach (var item in _recent.Items)
         {
             var label = item.Text.Length > 60 ? item.Text[..60] + "…" : item.Text;
             var text = item.Text;

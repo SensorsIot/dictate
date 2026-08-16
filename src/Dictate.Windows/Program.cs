@@ -9,6 +9,15 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
 
+        // A tray application that dies on an unhandled exception leaves the user
+        // with a crash dialog and no dictation, usually mid-sentence. Show what
+        // happened and keep the message loop alive; the session state machine
+        // returns to Idle on the next press either way.
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) =>
+            MessageBox.Show($"dictate hit an unexpected error and is still running:\n\n{e.Exception}",
+                "dictate", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
         if (args.Any(a => a is "--auth" or "-a"))
         {
             return AuthForm.Prompt() ? 0 : 1;
