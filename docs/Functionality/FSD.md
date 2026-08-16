@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft — requirements approved, verification largely undesigned |
-| **Version** | 0.1.0 |
+| **Status** | Released — v0.1.9. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
+| **Version** | 0.1.9 |
 | **Last updated** | 2026-08-16 |
 | **Derives from** | [`../decisions.md`](../decisions.md) (interview of 2026-08-16) |
 | **Complexity** | Medium |

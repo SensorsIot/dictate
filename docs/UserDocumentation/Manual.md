@@ -1,10 +1,7 @@
 # dictate — User Manual
 
-> **Status: incomplete.** The client is still being implemented, so the chapters
-> below describe intended behaviour rather than something you can run today.
-> Chapter 6 (Diagnostics) is a stub. This file ships from the start, carrying an
-> honest status line, so that the first person to install dictate does not
-> discover there are no instructions exactly when they need them.
+> **Applies to v0.1.9 and later.** Everything below describes behaviour that has
+> been run on a real machine, not intended behaviour.
 
 The OPERATE plane. One manual with chapters — add a chapter, never a sibling
 document.
@@ -107,26 +104,26 @@ quit dictate; that is the no-persistence promise, not a bug.
 
 ## 6. Diagnostics and recovery
 
-> **Stub.** To be written once the client is running and real failure modes are
-> known. It will cover: no text appearing, wrong language, mangled terms, an
-> unresponsive hotkey, and rotating a leaked API key.
+### Other audio misbehaves while dictate is running
 
-### Music and other audio go quiet while you dictate
+Fixed in v0.1.6. Earlier versions held an output stream open for the whole time
+dictate was running, which stopped the audio device idling and interfered with
+whatever else was playing. If you see this on 0.1.6 or later, it is a new bug —
+please report it.
 
-Windows, not dictate. When it detects "communications activity" it ducks all
-other audio by 80%, and opening a microphone counts. Turn it off once:
+Windows also has its own feature that ducks all other audio by 80% when it
+detects "communications activity", and opening a microphone counts. That is a
+machine setting, not dictate: **Sound settings → More sound settings →
+Communications → Do nothing**. It was investigated at length here and turned out
+*not* to be the cause of the interference above, but it is worth knowing about.
 
-1. Right-click the speaker icon → **Sound settings** → **More sound settings**
-2. **Communications** tab → **Do nothing** → OK
+### Turning the feedback off
 
-dictate cannot switch this off for you. Capture goes through winmm, which does
-not let an application choose its audio role — Windows picks it. Avoiding the
-duck from inside dictate would mean moving to WASAPI and adding a resampler to
-the recording path, which is a lot of new machinery in the one part of the
-pipeline currently working well. If the ducking turns out to be a daily
-irritation rather than a curiosity, say so and it is worth doing.
+`"PlaySounds": false` stops the tones; `"ShowOverlay": false` hides the
+indicator. The tray icon still changes colour, so you keep a state cue either
+way.
 
-### Diagnostics
+### The diagnostic log
 
 Set `"EnableDiagnosticLog": true` in the config and restart. dictate then writes
 `%LOCALAPPDATA%\dictate\dictate.log` — one line per utterance with timings,
@@ -142,12 +139,25 @@ outcome, target application, and process counters:
 deliberate: the no-persistence promise stands, and a character count is enough
 to correlate a delivery problem without keeping your sentences.
 
-Known so far:
+### Symptoms and causes
 
-| Symptom | Likely cause |
+Turn the diagnostic log on first — it answers most of these directly.
+
+| Symptom | Cause and fix |
 |---|---|
-| Nothing typed, no error | The focused window is running as administrator; dictate cannot send it input |
-| Other audio ducks while dictating | Windows communications ducking — see above |
-| Text goes to the clipboard every time | You are switching windows before the text is ready |
-| Every utterance fails with a 4xx | Key is wrong or expired — re-run `dictate.exe --auth` |
-| Every utterance fails mentioning a model | ElevenLabs changed the Scribe model identifier; set `ScribeModelId` in the config |
+| Nothing typed, no error | The focused window is running as administrator. Windows will not let an unelevated process send it input, and running dictate elevated breaks every *other* application instead. |
+| Text lands in the wrong application | The wrong window had focus when you pressed the key. Press Ctrl+V — every utterance is on the clipboard too. |
+| Text goes to the clipboard every time | You are switching windows before the text is ready. That is the safety net working, not a fault. |
+| The first dictation after a boot produces nothing | Some USB interfaces return valid frames of digital silence until their capture stream spins up; dictate reports "the microphone produced only silence". Set `"KeepMicrophoneOpen": true`. |
+| Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired Anthropic key. |
+| A German sentence comes back in English | A bug, not a setting. Cleanup is explicitly instructed never to translate. Please report it. |
+| A term is consistently mis-spelled | Add it to `Vocabulary` in the config. |
+| The hotkey does nothing | Check the tray icon is there. If it is, restart dictate — another application may have taken the low-level hook. |
+| Every utterance fails with a 4xx | Key wrong or expired: tray menu → **Re-enter API keys…**, then restart. |
+| Every utterance fails mentioning a model | ElevenLabs changed the Scribe model identifier; set `ScribeModelId` in the config. |
+
+### Rotating a leaked API key
+
+Revoke it at the provider first, then tray menu → **Re-enter API keys…** and
+restart dictate. Keys live in Windows Credential Manager under `dictate:*`, never
+in a file, so there is nothing else to clean up.

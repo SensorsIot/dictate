@@ -26,6 +26,20 @@ is the record of what was actually decided and the FSD is wrong.
 | D-17 | Hotkey is **Right Ctrl** | CapsLock; mouse side button; configurable-only | Right Alt is AltGr on the user's Swiss layout — binding it would cost `@ { } [ ] \`. |
 | D-18 | Repository **`SensorsIot/dictate`, public**; devcontainer on host port **2227** | Private | Matches the rest of the fleet. No secrets in the tree. |
 
+## Decided during field use, 2026-08-16
+
+Everything above predates any code. These came out of running it on the real
+machine, and each replaced something that had seemed reasonable on paper.
+
+| # | Decision | What it replaced | Why |
+|---|---|---|---|
+| D-19 | Short synthesised tones (B5 start, D5 stop, low G3 error) | `SystemSounds` Asterisk / Beep / Hand | Those are Windows notification and error chimes. An error chime at the end of every sentence trains you to ignore it. |
+| D-20 | The output device closes after 30 s of quiet | Holding it open for the process lifetime | Holding it open kept dictate on the loudspeaker around the clock and stopped the endpoint idling — the actual cause of the audio interference, after two theories about Windows ducking proved wrong. |
+| D-21 | Every utterance also goes on the clipboard | Clipboard only when focus changed mid-flight | The focus-change check structurally cannot see the commoner case: the wrong window was focused the whole time, so nothing changed and delivery looked successful. |
+| D-22 | The indicator sits in a fixed screen corner | Following the mouse cursor | A fixed corner is somewhere you learn to glance at; one that follows the cursor is never twice in the same place. |
+| D-23 | An opt-in diagnostic log, metadata only | Nothing | Diagnosing a shipped binary from another machine meant reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. The log records timings and counters, never dictated text, so D-12 still holds. |
+| D-24 | No notification on a successful dictation | A per-utterance timings popup | It was a testing aid. A balloon after every sentence is noise, and noise trains people to ignore the balloons that matter. |
+
 ## Assistant recommendations the user overrode
 
 Recorded because they are the decisions most likely to be revisited, and the
