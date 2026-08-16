@@ -7,10 +7,10 @@
 # status:      designed | implemented | blocked
 # last_result: never_run | pass | fail   (+ run_id when evidence exists)
 #
-# A test that is `implemented` but `never_run` discharges nothing. That is the
-# honest position for every host test below: there is no .NET SDK in the
-# devcontainer (decisions.md D-15), so nothing here has executed yet. The first
-# CI run on push is what turns these green — or not.
+# A test that is `implemented` but `never_run` discharges nothing. There is no
+# .NET SDK in the devcontainer (decisions.md D-15), so the host tier only ever
+# executes in CI, and the desktop tier only ever on the Windows machine by hand.
+# Read `last_result`, not `status`.
 
 version: 1
 updated: 2026-08-16
@@ -222,7 +222,7 @@ tests:
     status: implemented
     last_result: never_run   # no tag has been pushed yet
 
-  # ---- desktop tier: all designed, none executed ------------------------------
+  # ---- desktop tier: mostly designed; D-16 and D-17 have run ------------------
 
   - id: D-01
     name: Hotkey press and release drive the session from any focused app
