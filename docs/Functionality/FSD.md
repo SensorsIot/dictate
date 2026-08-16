@@ -322,8 +322,11 @@ captured before the failure shall still be processed.
 `POST https://api.elevenlabs.io/v1/speech-to-text`, authenticated with the
 `xi-api-key` header.
 
-**FR-10.2** [Must] `[derived]` The Scribe model identifier shall be configurable,
+**FR-10.2** [Must] `[user]` The Scribe model identifier shall be configurable,
 default `scribe_v2`.
+
+> `scribe_v2` confirmed by the user on 2026-08-16 (O-03). It stays configurable
+> so a future Scribe generation is a settings change, not a rebuild.
 
 **FR-10.3** [Must] `[user]` When `Language` is `Auto` no `language_code` shall be
 sent; when it is `German` or `English`, `de` or `en` shall be sent respectively.
