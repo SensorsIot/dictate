@@ -66,9 +66,18 @@ internal sealed class Feedback : IDisposable
                 // would let beeps queue up behind each other.
                 BufferDuration = TimeSpan.FromMilliseconds(600),
                 DiscardOnBufferOverflow = true,
+
+                // Pad short reads with silence rather than returning fewer bytes
+                // than asked for. Without this the output driver is handed a
+                // partially-filled buffer between tones and plays whatever was
+                // there before — heard as a burst of noise around the beep.
+                // It defaults to true, but this is load-bearing enough to state.
+                ReadFully = true,
             };
 
-            _output = new WaveOutEvent { DesiredLatency = 100 };
+            // 60 ms rather than 100: a 70 ms tone was less than one buffer
+            // period, so it straddled a boundary and part of it could be cut.
+            _output = new WaveOutEvent { DesiredLatency = 60, NumberOfBuffers = 3 };
             _output.Init(_sink);
             _output.Play(); // plays silence until something is written
         }
@@ -90,7 +99,12 @@ internal sealed class Feedback : IDisposable
     private static byte[] Tone(double frequency, int milliseconds, double amplitude = 0.22)
     {
         var samples = SampleRate * milliseconds / 1000;
-        var buffer = new byte[samples * 2];
+
+        // Trailing silence, so playback ends on quiet rather than on the buffer
+        // running dry mid-stream. An underrun at the tail is heard as a click or
+        // a fragment of the previous tone.
+        var tail = SampleRate * 80 / 1000;
+        var buffer = new byte[(samples + tail) * 2];
         var fade = Math.Min(samples / 2, SampleRate * 6 / 1000); // 6 ms
 
         for (var i = 0; i < samples; i++)
@@ -133,9 +147,12 @@ internal sealed class Feedback : IDisposable
 
             try
             {
-                // Drop anything still pending so a fast press-release does not
-                // hear the start tone after the stop tone.
-                _sink.ClearBuffer();
+                // Deliberately not ClearBuffer() first. Cutting a tone off
+                // mid-sample is itself an audible click, and the two tones
+                // cannot overlap in practice: a session must be held for
+                // MinimumHoldMs (300 ms) to produce a stop tone at all, and the
+                // start tone is 70 ms. Clearing only ever truncated something
+                // that was still legitimately playing.
                 _sink.AddSamples(tone, 0, tone.Length);
             }
             catch (Exception)
