@@ -11,7 +11,7 @@ namespace Dictate.Core;
 /// fields, so there is no path by which utterance text can be passed in by
 /// accident. Where the size of an utterance matters, log its length.
 ///
-/// Off by default (D-12 chose zero persistence). It exists because diagnosing a
+/// Off by default: the user chose zero persistence. It exists because diagnosing a
 /// shipped binary from another machine otherwise means reconstructing its
 /// behaviour from Windows event logs, which is slow and often inconclusive —
 /// a silent exit and a deliberate quit look identical from outside.

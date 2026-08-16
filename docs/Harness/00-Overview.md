@@ -4,10 +4,25 @@ The HOW plane. Nothing here is externally observable; if a statement could be
 checked by a black-box tester, it belongs in the [FSD](../Functionality/FSD.md)
 instead.
 
+## 0. Why it is built this way
+
+Implementation choices and what they replaced. Product-level choices — what the
+system must do — are in the [FSD](../Functionality/FSD.md) §1.4.
+
+| Choice | Rejected | Why |
+|---|---|---|
+| C# / .NET 9 | Python · Rust · Electron | The application is Win32 interop plus two HTTP calls. That is where Python is weakest — `ctypes` structs, third-party hook wrappers, PyInstaller against antivirus — and where C# is strongest. Ships as one self-contained exe with no runtime to install. |
+| `Dictate.Core` + `Dictate.Windows` in one repo | A single flat project · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
+| Builds only in GitHub Actions | The SDK in the devcontainer | The user's explicit choice, with the round-trip cost stated and accepted. See §1 — it shapes how you work here more than anything else. |
+| winmm (`WaveInEvent`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
+| Synthesised tones, output device closed after 30 s idle | Windows `SystemSounds` · holding the output open for the process lifetime | The chimes carry the wrong meaning — an error chime after every sentence trains you to ignore it. Holding the device open was worse: it kept dictate on the loudspeaker around the clock and stopped the endpoint idling, which turned out to be the real cause of an audio-interference bug that two theories about Windows ducking failed to explain. |
+| An opt-in diagnostic log, metadata only | No log at all | Diagnosing a shipped binary from another machine meant reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. It records timings and counters, never dictated text, so FR-17.1 still holds. |
+| Batch upload, streaming deferred | Streaming transcription from the start | Correctness first, then measure. `ITranscriber` is the seam a streaming backend drops into without touching the pipeline. |
+
 ## 1. The constraint that shapes everything
 
-**There is no .NET SDK in the devcontainer.** This was decided deliberately
-(`decisions.md` D-15) and it has consequences you will feel within ten minutes:
+**There is no .NET SDK in the devcontainer.** This was the user's explicit choice
+(see §0) and it has consequences you will feel within ten minutes:
 
 - `dotnet build`, `dotnet test` and `dotnet run` do not exist locally.
 - A compile error is discovered by GitHub Actions, roughly 2–3 minutes after you
@@ -49,7 +64,7 @@ compile it. It compiles there; it cannot run there.
 
 | Interface | In `Core` | Exists so that |
 |---|---|---|
-| `ITranscriber` | yes | A streaming Scribe backend can replace the batch one without touching the pipeline (D-16) |
+| `ITranscriber` | yes | A streaming Scribe backend can replace the batch one without touching the pipeline (§0) |
 | `ICleaner` | yes | Cleanup can be swapped, benchmarked, or disabled entirely (`PassthroughCleaner`) |
 
 Both are the reason `DictationPipeline` is testable without a network. Add a new

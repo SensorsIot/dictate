@@ -92,10 +92,9 @@ that way.
 
 | | |
 |---|---|
-| [What it must do](docs/Functionality/FSD.md) | Functional specification, state model, verification contracts |
+| [What it must do](docs/Functionality/FSD.md) | Functional specification, state model, verification contracts, and why each choice was made |
 | [How it is built](docs/Harness/00-Overview.md) | Build rules, seams, testing standard |
 | [How to run it](docs/UserDocumentation/Manual.md) | Install, use, configure, recover |
-| [Why it is like this](docs/decisions.md) | Every design decision and what was rejected |
 | [What is verified](testing/test-plan.yaml) | Every test, its tier, and what it last produced |
 
 ## Status

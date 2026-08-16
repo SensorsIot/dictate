@@ -5,7 +5,7 @@
 | **Status** | Released — v0.1.9. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
 | **Version** | 0.1.9 |
 | **Last updated** | 2026-08-16 |
-| **Derives from** | [`../decisions.md`](../decisions.md) (interview of 2026-08-16) |
+| **Derives from** | A design interview on 2026-08-16; the choices it settled are in §1.4 |
 | **Complexity** | Medium |
 | **Plane** | WHAT — externally observable behaviour only. Build and code rules live in [`../Harness/`](../Harness/00-Overview.md); operating instructions in [`../UserDocumentation/Manual.md`](../UserDocumentation/Manual.md). |
 
@@ -51,7 +51,36 @@ This is that run, and it is the acceptance gate. **Not yet confirmed by the user
 | 7 | — | The sentence appears at the caret: punctuated, no fillers, in German, vocabulary term spelled per the configured list |
 | 8 | User checks the disk | No audio file, no transcript file, anywhere |
 
-### 1.4 Scope boundary
+### 1.4 What was chosen, and what was rejected
+
+Rationale lives with the requirement it explains, so that changing the
+requirement forces you past the reason for it. This table covers only the
+product-level choices that shaped the whole system; implementation choices —
+language, project split, build strategy, audio stack — are in
+[`../Harness/00-Overview.md`](../Harness/00-Overview.md), because they are HOW.
+
+| Choice | Rejected | Why |
+|---|---|---|
+| Windows 11 client | Linux desktop · cross-platform · a service on the dev VM | The hotkey, the microphone and the target window all live there. A container on a headless VM has none of the three. |
+| ElevenLabs Scribe | Local faster-whisper · Groq · Deepgram | Chosen by the user. The dev VM has 4 vCPUs and no GPU, so a local model there was never viable. |
+| Claude Haiku 4.5 for cleanup | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. |
+| Push-to-talk, hold | Toggle · toggle with silence auto-stop | Key release is an unambiguous end-of-utterance signal. No VAD, and no way to leave the microphone hot by accident. |
+| Synthetic typing (`SendInput`) | Clipboard paste with restore · clipboard only | Works in terminals and over RDP without a per-application paste chord, and does not clobber the clipboard as a side effect of delivery. |
+| German + English, auto with a pin | English only · full auto with no override | The user's work mixes both in one sentence, and auto-detection misfires on short utterances. |
+| Hygiene + vocabulary + app context | Hygiene only · a full rewriting assistant | Voice commands were rejected outright: the model would have to separate content from instruction, and would eventually eat a wanted sentence. |
+| Nothing persisted to disk | Transcript history · an audio ring buffer | The user's call, against a recommendation to keep transcripts for tuning. FR-17.2's in-memory buffer is the compromise that keeps "nothing is lost" honest. |
+| Keys in Windows Credential Manager | Infisical CLI · a plaintext `.env` · a proxy service | DPAPI-encrypted at rest, works off the home LAN, no dependency on another machine being up. |
+| Pin the target window, fall back to the clipboard | Best-effort typing into whatever has focus | Typing into whatever happens to be in front is how dictation lands a sentence in the wrong chat, or at a shell prompt. |
+| Right Ctrl | Right Alt · CapsLock · a mouse button | Right Alt is AltGr on a Swiss layout; binding it would cost `@ { } [ ] \`. |
+
+Six further choices were made only after running it on real hardware, and each
+overturned something that had seemed reasonable on paper. They are recorded at
+the requirement they changed: FR-14.3 (synthesised tones, not Windows chimes),
+FR-14.2 (a fixed corner, not the cursor), FR-14.5 (no notification on success),
+FR-6.7 (always copy to the clipboard), and in the Harness for the audio-device
+lifetime and the diagnostic log.
+
+### 1.5 Scope boundary
 
 The system under test ends at the last interface dictate owns: the `SendInput`
 call and the clipboard write. Whether a given third-party application renders
@@ -149,16 +178,16 @@ exist.
 | R-04 | Audio of everything spoken accumulates on disk | A laptop theft becomes a recording leak | FR-18.1: no audio or transcript is ever written |
 | R-05 | An API key is readable on the machine | Account compromise | FR-16.1: DPAPI via Credential Manager, never a file |
 | R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.4 boundary. Per-app chunking (FR-13.3) is the escape hatch |
-| R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted by the user (D-15). Host tests keep the blast radius small |
+| R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted by the user; see the Harness §0. Host tests keep the blast radius small |
 | R-08 | Scribe or Anthropic changes a model identifier | Every utterance fails | FR-11.2/FR-12.2 make both configurable; FR-8.4 surfaces the API's own error text |
 
 ### 4.1 Explicitly out of scope
 
-- Voice commands ("delete that", "make it formal") — rejected in D-07.
-- Streaming transcription — deferred in D-16.
+- Voice commands ("delete that", "make it formal") — rejected; see §1.4.
+- Streaming transcription — deferred; see the Harness §0.
 - Any platform other than Windows 11 x64.
 - Multi-user or shared-machine operation.
-- Persisting transcripts, audio, or usage history (D-12).
+- Persisting transcripts, audio, or usage history — see §1.4.
 
 ---
 
@@ -308,7 +337,7 @@ application by default, and suppressed only if the user opts in.
 
 > Rationale: Right Ctrl alone is a no-op in nearly every application, whereas
 > swallowing it breaks every Ctrl+key combination made with that hand. `[assumed]`
-> — the user chose the key (D-17) but not the suppression behaviour.
+> — the user chose the key (§1.4) but not the suppression behaviour.
 
 **NFR-8.5** [Must] `[derived]` The application shall run unelevated.
 
@@ -519,7 +548,8 @@ keys in memory has no defence, and claiming otherwise would be theatre.
 rest) between them mean a stolen profile yields neither the keys nor the history.
 
 **Accepted, not mitigated.** Utterance audio and text traverse two third-party
-services in cleartext-to-them form. That is inherent to D-02 and D-03. Anyone for
+services in cleartext-to-them form. That is inherent to the choice of Scribe and
+Haiku (§1.4). Anyone for
 whom that is unacceptable needs a local model, which is a different product.
 
 ## 19. Performance
@@ -612,6 +642,5 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 
 ## Related
 
-- [[decisions]] — what was chosen and what was rejected
 - [[Harness/00-Overview]] — how the project is built and changed
 - [[UserDocumentation/Manual]] — how to install and run it

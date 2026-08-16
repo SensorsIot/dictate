@@ -6,8 +6,8 @@ is only about collaborating on the repository.
 
 ## The one thing that will catch you out
 
-**There is no .NET SDK in this devcontainer.** Deliberate — `docs/decisions.md`
-D-15. So:
+**There is no .NET SDK in this devcontainer.** Deliberate — see
+`docs/Harness/00-Overview.md` §0. So:
 
 - `dotnet build` / `dotnet test` / `dotnet run` do not exist here.
 - Compile errors surface in GitHub Actions ~2–3 minutes after a push.
@@ -26,7 +26,7 @@ the Anthropic client's timeout property, for exactly this reason.
 | `src/Dictate.Core/` | Platform-free. Compiles **and is tested** on Linux. |
 | `src/Dictate.Windows/` | Every Win32 call. `net9.0-windows`, WinExe. |
 | `tests/Dictate.Core.Tests/` | xunit, host tier, runs in CI on every push. |
-| `docs/` | Three planes — WHAT / HOW / OPERATE. Start at `00-Overview.md`. |
+| `docs/` | Three planes — WHAT / HOW / OPERATE. Start at `00-Overview.md`. Rationale sits beside what it explains: FSD §1.4, Harness §0. |
 | `testing/test-plan.yaml` | Every test, its tier, and the requirements it discharges. |
 
 **`Dictate.Core` must not reference a Windows-only API.** CI enforces it by
@@ -72,5 +72,5 @@ executed yet**. Implemented ≠ verified.
 - Don't add a `.ico` — tray icons are drawn at runtime in `TrayIcons.cs`.
 - Don't make the app elevated. An elevated hook cannot see input bound for
   unelevated windows, so dictation would stop working in ordinary apps.
-- Don't write audio or transcripts to disk. FR-17.1 is a user decision (D-12),
-  not an oversight, and the in-memory ring buffer is the agreed compromise.
+- Don't write audio or transcripts to disk. FR-17.1 is a user decision, not an
+  oversight, and the in-memory ring buffer is the agreed compromise.

@@ -8,7 +8,7 @@ the meantime — that is the point of the tag, not an excuse to leave it unresol
 |---|---|---|---|---|
 | O-01 | Is the standard journey in FSD §1.3 the run you actually expect? | User | Workflow test W-01 — the acceptance gate | The eight steps as written |
 | O-02 | Should the hotkey be swallowed, or passed through to the focused app? | User | FR-8.4 | Passed through. Right Ctrl alone is a no-op nearly everywhere, and swallowing it breaks Ctrl+key combinations |
-| O-04 | Is 2.5 s an acceptable ceiling for release-to-text? | User, after using it | NFR-19.1 | 2.5 s. If it feels slow, D-16 (streaming) is the lever |
+| O-04 | Is 2.5 s an acceptable ceiling for release-to-text? | User, after using it | NFR-19.1 | 2.5 s. If it feels slow, streaming transcription is the lever — Harness §0 |
 | O-05 | Should there be a second hotkey to pin the language for the next utterance? | User | An addition to FR-10.3 | No extra key; the config setting is enough |
 | O-06 | Do any of the user's regular applications drop fast synthetic input? | Observation | The `InjectionChunkSize` default | None. 200 characters per batch, no delay |
 | O-07 | Does the exe need code signing to avoid SmartScreen friction? | User | Release workflow | Unsigned. The warning is a one-time click |

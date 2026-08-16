@@ -4,11 +4,13 @@
 # and what it last produced. The traceability matrix is generated from this file
 # plus @fsd tags in the source. Never hand-maintain a "covered" column.
 #
+# Test ids: H- host · C- CI · DT- desktop · W- workflow.
+#
 # status:      designed | implemented | blocked
 # last_result: never_run | pass | fail   (+ run_id when evidence exists)
 #
 # A test that is `implemented` but `never_run` discharges nothing. There is no
-# .NET SDK in the devcontainer (decisions.md D-15), so the host tier only ever
+# .NET SDK in the devcontainer (Harness §0), so the host tier only ever
 # executes in CI, and the desktop tier only ever on the Windows machine by hand.
 # Read `last_result`, not `status`.
 
@@ -73,7 +75,7 @@ tests:
     last_result: pass        # run 31955257714, 2026-08-16
     gap: >
       Covers the process-name and user-list arms only. The ConsoleWindowClass arm
-      lives in Dictate.Windows and is unreachable from the host tier — see D-05.
+      lives in Dictate.Windows and is unreachable from the host tier — see DT-05.
 
   - id: H-04
     name: Cleanup failure falls back to the raw transcript
@@ -169,7 +171,7 @@ tests:
     last_result: pass        # run 31955257714, 2026-08-16
     note: >
       Verifies the prompt says it, not that the model obeys it. Obedience is
-      D-03's risk and is checked at the desktop tier.
+      the cleanup model's risk, and is checked at the desktop tier.
 
   # ---- host tier: designed, not yet implemented ------------------------------
 
@@ -222,9 +224,9 @@ tests:
     status: implemented
     last_result: never_run   # no tag has been pushed yet
 
-  # ---- desktop tier: mostly designed; D-16 and D-17 have run ------------------
+  # ---- desktop tier: mostly designed; DT-16 and DT-17 have run ----------------
 
-  - id: D-01
+  - id: DT-01
     name: Hotkey press and release drive the session from any focused app
     kind: atomic
     scenario: standard
@@ -238,7 +240,7 @@ tests:
       Observed in one application. "From any focused app" needs at least a
       terminal, an editor and a browser before the clause is discharged.
 
-  - id: D-02
+  - id: DT-02
     name: A tap shorter than MinimumHoldMs is discarded silently
     kind: atomic
     scenario: deviation
@@ -246,7 +248,7 @@ tests:
     verifies: [FR-5.2]
     status: designed
 
-  - id: D-03
+  - id: DT-03
     name: Focus change before delivery routes text to the clipboard
     kind: atomic
     scenario: deviation
@@ -256,7 +258,7 @@ tests:
     status: designed
     evidence_required: screen recording plus clipboard dump
 
-  - id: D-04
+  - id: DT-04
     name: Dictating into a terminal produces one line and no execution
     kind: atomic
     scenario: negative
@@ -265,7 +267,7 @@ tests:
     must_not: the command line executes
     status: designed
 
-  - id: D-05
+  - id: DT-05
     name: A conhost-class window is classified as a console
     kind: atomic
     scenario: standard
@@ -274,7 +276,7 @@ tests:
     status: designed
     note: closes the gap declared on H-03
 
-  - id: D-06
+  - id: DT-06
     name: Self-typed text does not re-trigger the hotkey
     kind: atomic
     scenario: negative
@@ -282,7 +284,7 @@ tests:
     verifies: [FR-8.3]
     status: designed
 
-  - id: D-07
+  - id: DT-07
     name: Recording stops at the maximum and still transcribes
     kind: atomic
     scenario: deviation
@@ -290,7 +292,7 @@ tests:
     verifies: [FR-5.3]
     status: designed
 
-  - id: D-08
+  - id: DT-08
     name: A second press during transcription is ignored
     kind: atomic
     scenario: negative
@@ -298,7 +300,7 @@ tests:
     verifies: [FR-5.1]
     status: designed
 
-  - id: D-09
+  - id: DT-09
     name: No audio or transcript is written anywhere during ten utterances
     kind: atomic
     scenario: security
@@ -308,7 +310,7 @@ tests:
     status: designed
     evidence_required: file-system audit log over %APPDATA%, %TEMP% and cwd
 
-  - id: D-10
+  - id: DT-10
     name: Keys are stored in Credential Manager and appear in no file
     kind: atomic
     scenario: security
@@ -316,7 +318,7 @@ tests:
     verifies: [FR-15.1, FR-15.3]
     status: designed
 
-  - id: D-11
+  - id: DT-11
     name: Mixed German/English utterance is not translated
     kind: atomic
     scenario: standard
@@ -325,7 +327,7 @@ tests:
     must_not: any part returned in the other language
     status: designed
 
-  - id: D-12
+  - id: DT-12
     name: Vocabulary terms are spelled as configured
     kind: atomic
     scenario: standard
@@ -333,7 +335,7 @@ tests:
     verifies: [FR-11.6]
     status: designed
 
-  - id: D-16
+  - id: DT-16
     name: Consecutive dictations are separated, in consoles as well as elsewhere
     kind: atomic
     scenario: deviation
@@ -353,7 +355,7 @@ tests:
       unit test: the unit test proves the string is built with a space, not that
       the space reaches a terminal.
 
-  - id: D-17
+  - id: DT-17
     name: Handles, threads and working set plateau across a long session
     kind: atomic
     scenario: standard
@@ -367,7 +369,7 @@ tests:
       flat around 91 MB. The earlier 45->97 MB reading was pool and JIT warm-up
       settling. KeepMicrophoneOpen not required to hold it flat.
 
-  - id: D-13
+  - id: DT-13
     name: Surrogate-pair characters are typed correctly
     kind: atomic
     scenario: deviation
@@ -375,7 +377,7 @@ tests:
     verifies: [FR-12.2]
     status: designed
 
-  - id: D-14
+  - id: DT-14
     name: Elevated foreground window produces a reported failure, not silence
     kind: atomic
     scenario: negative
@@ -383,7 +385,7 @@ tests:
     verifies: [FR-12.4]
     status: designed
 
-  - id: D-15
+  - id: DT-15
     name: Published exe runs on a machine with no .NET installed
     kind: atomic
     scenario: standard
@@ -426,7 +428,7 @@ tests:
 #
 #   host      16 implemented, all passing · 3 designed
 #   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
-#   desktop   15 designed · 2 executed (D-16 fail on 0.1.3 then fixed, D-17 pass)
+#   desktop   15 designed · 2 executed (DT-16 fail on 0.1.3 then fixed, DT-17 pass)
 #   workflow   1, blocked on O-01
 #
 # What that does and does not mean. Verified: the pure logic — sanitisation,

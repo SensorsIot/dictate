@@ -72,7 +72,7 @@ public sealed class DictateConfig
     /// lifecycle, timings, outcomes and process counters. Never the dictated
     /// text — see <see cref="DiagnosticLog"/>.
     ///
-    /// Off by default, because D-12 chose zero persistence. Turn it on when
+    /// Off by default: the user chose zero persistence. Turn it on when
     /// something needs diagnosing from another machine.
     /// </summary>
     public bool EnableDiagnosticLog { get; set; }
