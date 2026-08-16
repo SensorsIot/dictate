@@ -10,9 +10,13 @@ namespace Dictate.Windows;
 /// finish a sentence trains you to ignore it. These are three short tones that
 /// differ only in pitch, so the cue is legible without being an event.
 ///
-/// The output device is opened once and kept open, feeding silence. Opening it
-/// per beep would put device-open latency between the key press and the cue —
-/// which is the exact bug this class is being changed to help diagnose.
+/// The output device is opened on the first tone and closed again after 30
+/// seconds of quiet. Two failure modes are being avoided at once: opening it per
+/// beep would put device-open latency between the key press and the cue, while
+/// holding it open for the life of the process — which is what this class did
+/// first — means dictate keeps a stream on the speakers around the clock,
+/// stopping the endpoint idling and interfering with whatever else uses it.
+/// Within a dictation every beep is instant; between them dictate is not there.
 /// </summary>
 internal sealed class Feedback : IDisposable
 {
@@ -23,8 +27,18 @@ internal sealed class Feedback : IDisposable
     private readonly byte[] _stop;
     private readonly byte[] _error;
 
+    /// <summary>
+    /// How long the output device stays open after the last tone. Long enough
+    /// that every beep within a dictation is instant, short enough that dictate
+    /// is not holding a stream on the speakers while idle.
+    /// </summary>
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private readonly object _gate = new();
+
     private WaveOutEvent? _output;
     private BufferedWaveProvider? _sink;
+    private System.Threading.Timer? _idle;
 
     internal Feedback(bool enabled)
     {
@@ -35,15 +49,15 @@ internal sealed class Feedback : IDisposable
         _start = Tone(988, 70);   // B5
         _stop = Tone(587, 70);    // D5
         _error = Tone(196, 180);  // G3 — clearly not one of the other two
-
-        if (_enabled)
-        {
-            OpenOutput();
-        }
     }
 
     private void OpenOutput()
     {
+        if (_output is not null)
+        {
+            return;
+        }
+
         try
         {
             _sink = new BufferedWaveProvider(new WaveFormat(SampleRate, 16, 1))
@@ -103,22 +117,61 @@ internal sealed class Feedback : IDisposable
 
     private void Play(byte[] tone)
     {
-        if (!_enabled || _sink is null)
+        if (!_enabled)
         {
             return;
         }
 
+        lock (_gate)
+        {
+            OpenOutput();
+
+            if (_sink is null)
+            {
+                return;
+            }
+
+            try
+            {
+                // Drop anything still pending so a fast press-release does not
+                // hear the start tone after the stop tone.
+                _sink.ClearBuffer();
+                _sink.AddSamples(tone, 0, tone.Length);
+            }
+            catch (Exception)
+            {
+                // A device removed while running. Silence is acceptable.
+            }
+
+            // Restart the idle countdown: the device closes only once dictation
+            // has actually stopped for a while.
+            _idle ??= new System.Threading.Timer(_ => CloseIfIdle(), null, Timeout.Infinite, Timeout.Infinite);
+            _idle.Change(IdleTimeout, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void CloseIfIdle()
+    {
+        lock (_gate)
+        {
+            CloseOutput();
+        }
+    }
+
+    private void CloseOutput()
+    {
         try
         {
-            // Drop anything still pending so a fast press-release does not hear
-            // the start tone after the stop tone.
-            _sink.ClearBuffer();
-            _sink.AddSamples(tone, 0, tone.Length);
+            _output?.Stop();
         }
         catch (Exception)
         {
-            // A device removed while running. Silence is an acceptable outcome.
+            // Device already gone.
         }
+
+        _output?.Dispose();
+        _output = null;
+        _sink = null;
     }
 
     internal void Start() => Play(_start);
@@ -129,17 +182,11 @@ internal sealed class Feedback : IDisposable
 
     public void Dispose()
     {
-        try
+        lock (_gate)
         {
-            _output?.Stop();
+            _idle?.Dispose();
+            _idle = null;
+            CloseOutput();
         }
-        catch (Exception)
-        {
-            // Disposing a device that is already gone.
-        }
-
-        _output?.Dispose();
-        _output = null;
-        _sink = null;
     }
 }
