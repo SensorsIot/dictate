@@ -56,6 +56,17 @@ public sealed class DictateConfig
     /// </summary>
     public bool AppendSpaceAfterInsert { get; set; } = true;
 
+    /// <summary>
+    /// Put every delivered utterance on the clipboard as well as typing it, so
+    /// a sentence that landed in the wrong window can be pasted into the right
+    /// one without going through the tray menu.
+    ///
+    /// The cost is that dictating overwrites whatever you had copied. That is a
+    /// real trade — turn it off if you routinely dictate while holding
+    /// something in the clipboard.
+    /// </summary>
+    public bool AlwaysCopyToClipboard { get; set; } = true;
+
     /// <summary>Report press-to-recording, transcription and cleanup timings after each utterance.</summary>
     public bool ShowTimings { get; set; }
 

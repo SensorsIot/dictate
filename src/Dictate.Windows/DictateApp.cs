@@ -327,6 +327,17 @@ internal sealed class DictateApp : ApplicationContext
                 $"cleanup {utterance.CleanupTime.TotalMilliseconds:0} ms");
         }
 
+        // Before delivery, not after: if typing throws, or lands somewhere the
+        // user did not intend, the text is already recoverable with Ctrl+V.
+        //
+        // This covers the case the focus-change check cannot see — the user had
+        // the wrong window focused the whole time, so nothing changed and the
+        // delivery looks perfectly successful from here.
+        if (_config.AlwaysCopyToClipboard)
+        {
+            QuietCopy(utterance.Text);
+        }
+
         // FR-6.2: the window that had focus at press time, or nothing.
         if (WindowInspector.Foreground() != _pinnedWindow)
         {
@@ -351,6 +362,23 @@ internal sealed class DictateApp : ApplicationContext
         {
             _log.Event("delivery.failed", ("error", ex.Message));
             ToClipboard(utterance.Text, "Could not type the text", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Copies without telling the user. Another process can hold the clipboard
+    /// open, and a balloon on every such collision would be noise about
+    /// something they did not ask for — the typing still happened.
+    /// </summary>
+    private void QuietCopy(string text)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (Exception ex)
+        {
+            _log.Event("clipboard.failed", ("error", ex.Message));
         }
     }
 

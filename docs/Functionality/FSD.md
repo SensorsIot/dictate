@@ -242,6 +242,22 @@ process name is in the built-in terminal list, or in the user's
 **FR-6.6** [Should] `[user]` The delivered text of the most recent utterances
 shall remain retrievable from the tray menu until the process exits.
 
+**FR-6.7** [Should] `[user]` Every delivered utterance shall also be placed on
+the clipboard, before injection is attempted.
+
+> Covers the case FR-6.2 structurally cannot: the user had the wrong window
+> focused for the whole utterance. Nothing changed, so the focus check passes
+> and delivery looks successful — the text is simply in the wrong place. Copying
+> before injection also means a failed or misdirected delivery is recoverable
+> with Ctrl+V rather than through the tray menu.
+>
+> The cost is that dictating overwrites the clipboard, so it is configurable.
+
+> **VC** — *Pre:* `AlwaysCopyToClipboard` true, target focused. *Stimulus:* one
+> utterance. *Expect:* the text is typed **and** the clipboard holds it.
+> *Must not:* a clipboard failure preventing or interrupting the typing.
+> *Tier:* desktop.
+
 ## 7. Degradation
 
 Ordered by preference. The principle: a scruffy sentence beats a lost one, and a
@@ -560,6 +576,12 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `Vocabulary` | string[] | project terms | FR-11.6 |
 | `ExtraCleanupInstruction` | string? | `null` | — |
 | `ExtraConsoleProcesses` | string[] | `[]` | FR-6.5 |
+| `AlwaysCopyToClipboard` | bool | `true` | FR-6.7 |
+| `AppendSpaceAfterInsert` | bool | `true` | FR-6.4 |
+| `SilenceThreshold` | int | `200` | FR-9.3 |
+| `KeepMicrophoneOpen` | bool | `false` | FR-9.2 |
+| `EnableDiagnosticLog` | bool | `false` | — |
+| `ShowTimings` | bool | `false` | — |
 | `InjectionChunkSize` | int | `200` | FR-12.3 |
 | `InjectionChunkDelayMs` | int | `0` | FR-12.3 |
 | `PlaySounds` | bool | `true` | FR-14.3 |

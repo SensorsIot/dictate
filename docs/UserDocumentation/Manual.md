@@ -80,18 +80,30 @@ The settings you are most likely to want:
 | `HotkeyVirtualKey` | `163` (Right Ctrl) | Virtual-key code to hold. **Do not use Right Alt** — on a Swiss keyboard that is AltGr, and you would lose `@ { } [ ] \` |
 | `MinimumHoldMs` | `300` | Presses shorter than this are ignored as accidental taps |
 | `MaximumRecordingSeconds` | `120` | Hard stop, so a stuck key cannot upload your afternoon |
+| `AlwaysCopyToClipboard` | `true` | Also put each utterance on the clipboard, so a misdirected one is one Ctrl+V away |
 | `PlaySounds` / `ShowOverlay` | `true` | Turn the feedback off |
+| `EnableDiagnosticLog` | `false` | Write `%LOCALAPPDATA%\dictate\dictate.log` — timings and outcomes, never your text |
+| `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently |
 | `ExtraConsoleProcesses` | `[]` | Extra terminal executables that must never receive newlines |
 
 A malformed `config.json` stops dictate at startup with an error rather than
 silently reverting to defaults — a typo that quietly undid every setting would
 look exactly like the settings never applying.
 
-## 5. Recovering an utterance
+## 5. When it lands in the wrong place
 
-The tray menu keeps the last few utterances in memory and lets you copy one
-again. They are gone when you quit dictate — that is the no-persistence promise,
-not a bug.
+**Just press Ctrl+V.** Every utterance goes on the clipboard as well as being
+typed, so if it went somewhere you didn't intend — usually because the wrong
+window had focus when you started — you can paste it where you actually wanted
+it without re-dictating.
+
+The trade-off: dictating overwrites whatever you had copied. If you routinely
+dictate while holding something in the clipboard, set
+`"AlwaysCopyToClipboard": false` and use the tray menu instead.
+
+The tray menu keeps the last five utterances in memory and lets you copy any of
+them again — useful when you notice two dictations later. They are gone when you
+quit dictate; that is the no-persistence promise, not a bug.
 
 ## 6. Diagnostics and recovery
 
