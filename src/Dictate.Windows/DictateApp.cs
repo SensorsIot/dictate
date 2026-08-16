@@ -338,8 +338,8 @@ internal sealed class DictateApp : ApplicationContext
         // A trailing space so consecutive dictations do not run together. Not
         // added to the clipboard path, where the user places the text and can
         // see exactly what they are pasting.
-        var typed = _config.AppendSpaceAfterInsert && !target.IsConsole
-            ? utterance.Text + " "
+        var typed = _config.AppendSpaceAfterInsert
+            ? TextSanitizer.WithTrailingSpace(utterance.Text)
             : utterance.Text;
 
         try

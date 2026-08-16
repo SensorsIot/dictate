@@ -32,6 +32,18 @@ public static class TextSanitizer
     }
 
     /// <summary>
+    /// Adds the separator between consecutive dictations, so "…run together."
+    /// and "Eins, zwei, drei" do not arrive as one word.
+    ///
+    /// Applied to consoles too. What is dangerous in a shell is a newline, which
+    /// presses Enter and runs the line; a trailing space does nothing at all —
+    /// and a terminal is where dictation is used most, so excluding it removed
+    /// the separator from exactly the case that needed it.
+    /// </summary>
+    public static string WithTrailingSpace(string text) =>
+        text.Length == 0 ? text : text + " ";
+
+    /// <summary>
     /// Makes <paramref name="text"/> safe to type into <paramref name="target"/>.
     /// In a console every line break collapses to a single space; elsewhere line
     /// breaks are normalised to \r\n and runs of blank lines are capped at one.

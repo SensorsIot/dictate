@@ -57,6 +57,35 @@ public class TextSanitizerTests
         Assert.Equal("", TextSanitizer.ForInjection("", Editor));
     }
 
+    [Fact]
+    public void A_separator_is_added_so_consecutive_dictations_do_not_run_together()
+    {
+        Assert.Equal("run together. ", TextSanitizer.WithTrailingSpace("run together."));
+    }
+
+    [Fact]
+    public void The_separator_applies_in_consoles_too()
+    {
+        // The original bug: the space was suppressed for console targets out of
+        // misplaced caution. A newline in a shell presses Enter; a space does
+        // nothing — and the terminal is where dictation is used most.
+        var text = TextSanitizer.ForInjection("git status", Console());
+
+        Assert.Equal("git status ", TextSanitizer.WithTrailingSpace(text));
+    }
+
+    [Fact]
+    public void No_separator_is_added_to_nothing()
+    {
+        Assert.Equal("", TextSanitizer.WithTrailingSpace(""));
+    }
+
+    [Fact]
+    public void Only_one_separator_is_added_per_utterance()
+    {
+        Assert.Equal("done. ", TextSanitizer.WithTrailingSpace(TextSanitizer.ForInjection("done.", Editor)));
+    }
+
     [Theory]
     [InlineData("wezterm-gui")]
     [InlineData("WezTerm-GUI")]
