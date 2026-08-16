@@ -333,6 +333,40 @@ tests:
     verifies: [FR-11.6]
     status: designed
 
+  - id: D-16
+    name: Consecutive dictations are separated, in consoles as well as elsewhere
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-6.4]
+    status: implemented
+    last_result: fail        # against 0.1.3
+    evidence: >
+      Matched pair on the Windows machine, 2026-08-16: identical 214-character
+      text, same run, differing only in destination —
+        n=8  target=msedge           console=False  delivered 215  (+1)
+        n=9  target=WindowsTerminal  console=True   delivered 214  (+0)
+      The separator was suppressed for console targets. Fixed in 0.1.4; the
+      host-tier test The_separator_applies_in_consoles_too now pins it.
+    note: >
+      Retest against 0.1.4. Kept as a desktop case rather than closed on the
+      unit test: the unit test proves the string is built with a space, not that
+      the space reaches a terminal.
+
+  - id: D-17
+    name: Handles, threads and working set plateau across a long session
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [NFR-19.3, NFR-19.4]
+    status: implemented
+    last_result: pass
+    evidence: >
+      Nine utterances on the Windows machine, 2026-08-16: handles oscillating in
+      a 709-753 band with no trend, threads near the starting 21, working set
+      flat around 91 MB. The earlier 45->97 MB reading was pool and JIT warm-up
+      settling. KeepMicrophoneOpen not required to hold it flat.
+
   - id: D-13
     name: Surrogate-pair characters are typed correctly
     kind: atomic
@@ -390,17 +424,22 @@ tests:
 # As of run 31955257714 (2026-08-16), 41 assertions across 12 host tests pass on
 # ubuntu-latest, and the whole solution — including the Windows head — compiles.
 #
-#   host      12 implemented, all passing · 3 designed
+#   host      16 implemented, all passing · 3 designed
 #   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
-#   desktop   15 designed, 0 implemented, 0 executed
+#   desktop   15 designed · 2 executed (D-16 fail on 0.1.3 then fixed, D-17 pass)
 #   workflow   1, blocked on O-01
 #
 # What that does and does not mean. Verified: the pure logic — sanitisation,
 # degradation, WAV framing, response parsing, prompt construction — plus the fact
 # that Dictate.Core carries no Windows dependency.
 #
-# NOT verified, and this is most of the product: no keystroke has ever been
-# synthesised, no microphone opened, no hotkey pressed, and neither ElevenLabs
-# nor Anthropic has been called with a real key. Every requirement resting on
-# those sits at "test designed". The desktop tier is where they get discharged,
-# and it needs the Windows machine and a human.
+# Since first release the desktop tier has begun reporting. Discharged by
+# measurement on the Windows machine: press-to-capture latency (46 ms external,
+# 7-9 ms internal, against a 300 ms hook budget), capture bracketing the hold to
+# within 34 ms, and the memory plateau above. Nine consecutive utterances
+# completed with status=Ok.
+#
+# Still NOT verified, and it is a lot: focus-change fallback, the console
+# newline prohibition end to end, elevated-window failure reporting, surrogate
+# pairs, the recording cap, and the no-persistence audit (FR-17.1) that nobody
+# has yet looked for. Those need the Windows machine and a human.

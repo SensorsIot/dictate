@@ -99,11 +99,43 @@ not a bug.
 > known. It will cover: no text appearing, wrong language, mangled terms, an
 > unresponsive hotkey, and rotating a leaked API key.
 
+### Music and other audio go quiet while you dictate
+
+Windows, not dictate. When it detects "communications activity" it ducks all
+other audio by 80%, and opening a microphone counts. Turn it off once:
+
+1. Right-click the speaker icon → **Sound settings** → **More sound settings**
+2. **Communications** tab → **Do nothing** → OK
+
+dictate cannot switch this off for you. Capture goes through winmm, which does
+not let an application choose its audio role — Windows picks it. Avoiding the
+duck from inside dictate would mean moving to WASAPI and adding a resampler to
+the recording path, which is a lot of new machinery in the one part of the
+pipeline currently working well. If the ducking turns out to be a daily
+irritation rather than a curiosity, say so and it is worth doing.
+
+### Diagnostics
+
+Set `"EnableDiagnosticLog": true` in the config and restart. dictate then writes
+`%LOCALAPPDATA%\dictate\dictate.log` — one line per utterance with timings,
+outcome, target application, and process counters:
+
+```
+2026-08-16 18:22:07.431  utterance  n=8  held=3200ms  status=Ok  chars=214
+                         target=msedge  console=False  transcribe=780ms
+                         cleanup=1100ms  wsMB=94  handles=722  threads=27
+```
+
+**It never records what you dictated** — only how long it was. That is
+deliberate: the no-persistence promise stands, and a character count is enough
+to correlate a delivery problem without keeping your sentences.
+
 Known so far:
 
 | Symptom | Likely cause |
 |---|---|
 | Nothing typed, no error | The focused window is running as administrator; dictate cannot send it input |
+| Other audio ducks while dictating | Windows communications ducking — see above |
 | Text goes to the clipboard every time | You are switching windows before the text is ready |
 | Every utterance fails with a 4xx | Key is wrong or expired — re-run `dictate.exe --auth` |
 | Every utterance fails mentioning a model | ElevenLabs changed the Scribe model identifier; set `ScribeModelId` in the config |
