@@ -1,5 +1,3 @@
-using System.Media;
-
 namespace Dictate.Windows;
 
 internal enum SessionState
@@ -95,28 +93,5 @@ internal sealed class Overlay : Form
         var y = Math.Min(cursor.Y + 28, screen.Bottom - Height - 8);
 
         Location = new Point(Math.Max(screen.Left + 8, x), Math.Max(screen.Top + 8, y));
-    }
-}
-
-/// <summary>Start, stop and error cues. Suppressible per FR-14.3.</summary>
-internal sealed class Feedback
-{
-    private readonly bool _sounds;
-
-    internal Feedback(bool sounds) => _sounds = sounds;
-
-    internal void Start()
-    {
-        if (_sounds) SystemSounds.Asterisk.Play();
-    }
-
-    internal void Stop()
-    {
-        if (_sounds) SystemSounds.Beep.Play();
-    }
-
-    internal void Error()
-    {
-        if (_sounds) SystemSounds.Hand.Play();
     }
 }

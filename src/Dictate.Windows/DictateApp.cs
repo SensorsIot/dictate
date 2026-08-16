@@ -354,6 +354,7 @@ internal sealed class DictateApp : ApplicationContext
         {
             _hotkey.Dispose();
             _recorder.Dispose();
+            _feedback.Dispose();
             _tray.Dispose();
             _icons.Dispose();
             _overlay.Dispose();
