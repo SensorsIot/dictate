@@ -147,12 +147,11 @@ internal sealed class Feedback : IDisposable
 
             try
             {
-                // Deliberately not ClearBuffer() first. Cutting a tone off
-                // mid-sample is itself an audible click, and the two tones
-                // cannot overlap in practice: a session must be held for
-                // MinimumHoldMs (300 ms) to produce a stop tone at all, and the
-                // start tone is 70 ms. Clearing only ever truncated something
-                // that was still legitimately playing.
+                // Clear first. 0.1.7 dropped this on the reasoning that the two
+                // tones "cannot overlap in practice" — wrong: without it queued
+                // tones accumulate and play back in sequence, heard as the beep
+                // repeating. Never more than one tone pending.
+                _sink.ClearBuffer();
                 _sink.AddSamples(tone, 0, tone.Length);
             }
             catch (Exception)

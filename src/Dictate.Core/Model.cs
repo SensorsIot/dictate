@@ -13,6 +13,19 @@ public sealed record TargetContext(string ProcessName, string WindowTitle, bool 
     public static readonly TargetContext Unknown = new("", "", false);
 }
 
+/// <summary>Where the recording indicator sits.</summary>
+public enum OverlayPosition
+{
+    /// <summary>Lower right of the main screen, above the taskbar. Predictable — you learn where to glance.</summary>
+    BottomRight,
+    BottomLeft,
+    TopRight,
+    TopLeft,
+
+    /// <summary>Follows the mouse. Close to where you are looking, but never in the same place twice.</summary>
+    NearCursor,
+}
+
 /// <summary>Which language Scribe should assume for an utterance.</summary>
 public enum LanguageMode
 {

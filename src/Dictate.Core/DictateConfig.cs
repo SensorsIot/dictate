@@ -122,6 +122,13 @@ public sealed class DictateConfig
     public bool PlaySounds { get; set; } = true;
     public bool ShowOverlay { get; set; } = true;
 
+    /// <summary>
+    /// Where the recording indicator appears. Lower right of the main screen by
+    /// default: a fixed corner is somewhere you can learn to glance at, whereas
+    /// one that follows the cursor is never twice in the same place.
+    /// </summary>
+    public OverlayPosition OverlayPosition { get; set; } = OverlayPosition.BottomRight;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,

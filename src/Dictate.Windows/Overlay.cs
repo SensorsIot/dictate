@@ -1,3 +1,5 @@
+using Dictate.Core;
+
 namespace Dictate.Windows;
 
 internal enum SessionState
@@ -22,9 +24,12 @@ internal sealed class Overlay : Form
     private const int WS_EX_TOPMOST = 0x00000008;
 
     private readonly Label _label;
+    private readonly OverlayPosition _position;
 
-    internal Overlay()
+    internal Overlay(OverlayPosition position)
     {
+        _position = position;
+
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
@@ -74,24 +79,51 @@ internal sealed class Overlay : Form
                 break;
         }
 
-        PositionNearCursor();
+        Reposition();
 
         if (!Visible)
         {
             Show();
         }
+
+        // Re-assert topmost on every appearance. Another application going
+        // full-screen or topmost while dictate was idle can otherwise leave the
+        // indicator behind it, which is exactly when it is needed.
+        BringToFront();
     }
 
-    private void PositionNearCursor()
+    /// <summary>
+    /// Places the indicator. Corner positions use the **main** screen's working
+    /// area, so it sits above the taskbar and stays in one place across a
+    /// multi-monitor desktop rather than wandering with the mouse.
+    /// </summary>
+    private void Reposition()
     {
-        var cursor = Cursor.Position;
-        var screen = Screen.FromPoint(cursor).WorkingArea;
+        const int margin = 16;
 
-        // Below-right of the cursor, nudged back inside the working area so it
-        // is never half off a monitor edge.
-        var x = Math.Min(cursor.X + 20, screen.Right - Width - 8);
-        var y = Math.Min(cursor.Y + 28, screen.Bottom - Height - 8);
+        if (_position == OverlayPosition.NearCursor)
+        {
+            var cursor = Cursor.Position;
+            var near = Screen.FromPoint(cursor).WorkingArea;
 
-        Location = new Point(Math.Max(screen.Left + 8, x), Math.Max(screen.Top + 8, y));
+            var cx = Math.Min(cursor.X + 20, near.Right - Width - 8);
+            var cy = Math.Min(cursor.Y + 28, near.Bottom - Height - 8);
+            Location = new Point(Math.Max(near.Left + 8, cx), Math.Max(near.Top + 8, cy));
+            return;
+        }
+
+        // WorkingArea rather than Bounds: it excludes the taskbar, so the
+        // indicator is never hidden behind it.
+        var screen = (Screen.PrimaryScreen ?? Screen.AllScreens[0]).WorkingArea;
+
+        var x = _position is OverlayPosition.BottomRight or OverlayPosition.TopRight
+            ? screen.Right - Width - margin
+            : screen.Left + margin;
+
+        var y = _position is OverlayPosition.BottomRight or OverlayPosition.BottomLeft
+            ? screen.Bottom - Height - margin
+            : screen.Top + margin;
+
+        Location = new Point(x, y);
     }
 }

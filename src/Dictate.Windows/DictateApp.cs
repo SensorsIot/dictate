@@ -45,7 +45,7 @@ internal sealed class DictateApp : ApplicationContext
         _log = log;
 
         _icons = new TrayIcons();
-        _overlay = new Overlay();
+        _overlay = new Overlay(config.OverlayPosition);
         _feedback = new Feedback(config.PlaySounds);
         _recorder = new AudioRecorder(config.MaximumRecordingSeconds, config.KeepMicrophoneOpen);
         _recorder.LimitReached += OnRecordingLimitReached;
