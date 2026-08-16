@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>Dictate.Core</RootNamespace>
+    <!-- Platform-free on purpose: everything here runs in CI on ubuntu and is
+         unit-tested there. Nothing in this project may reference Windows APIs. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.9.0" />
+  </ItemGroup>
+
+</Project>

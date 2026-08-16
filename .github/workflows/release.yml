@@ -1,0 +1,83 @@
+name: Release
+
+# Tag v1.2.3 on main -> a self-contained dictate.exe attached to a GitHub
+# release. The version comes from the tag; nothing is hand-edited.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without the leading v)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish win-x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Building ${version}"
+
+      # Host tests run on Linux in ci.yml, but a tag must not publish a build
+      # whose core is broken — so they run here too before anything is packaged.
+      - name: Test
+        run: dotnet test tests/Dictate.Core.Tests/Dictate.Core.Tests.csproj --configuration Release
+
+      - name: Publish
+        run: >
+          dotnet publish src/Dictate.Windows/Dictate.Windows.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:Version=${{ steps.version.outputs.version }}
+          --output publish
+
+      - name: Check the exe exists
+        shell: bash
+        run: |
+          test -f publish/dictate.exe || { echo "publish/dictate.exe missing"; ls -R publish; exit 1; }
+          echo "size: $(stat -c%s publish/dictate.exe) bytes"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictate-${{ steps.version.outputs.version }}-win-x64
+          path: publish/dictate.exe
+
+      - name: Create release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish/dictate.exe
+          generate_release_notes: true
+          body: |
+            Self-contained build — no .NET runtime required.
+
+            Download `dictate.exe`, then run `dictate.exe --auth` once to store
+            your ElevenLabs and Anthropic keys in Windows Credential Manager.
+
+            Hold **Right Ctrl**, speak, release.
+
+            Windows SmartScreen will warn about an unsigned executable on first
+            run: *More info -> Run anyway*.

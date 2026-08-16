@@ -1,0 +1,297 @@
+using System.Diagnostics;
+using Dictate.Core;
+
+namespace Dictate.Windows;
+
+/// <summary>
+/// The tray application: owns the session state machine of FSD §5 and wires the
+/// hotkey, the recorder, the pipeline and delivery together.
+///
+/// Everything here runs on the UI thread. The keyboard hook callback is
+/// delivered there because the hook is installed from it, so no marshalling is
+/// needed for state changes; the two network calls are awaited, which yields the
+/// thread and resumes on it.
+/// </summary>
+internal sealed class DictateApp : ApplicationContext
+{
+    /// <summary>How many delivered utterances stay recoverable. In memory only (FR-17.2).</summary>
+    private const int RecentCapacity = 5;
+
+    private readonly DictateConfig _config;
+    private readonly DictationPipeline _pipeline;
+    private readonly AudioRecorder _recorder;
+    private readonly HotkeyListener _hotkey;
+    private readonly Overlay _overlay;
+    private readonly Feedback _feedback;
+    private readonly TrayIcons _icons;
+    private readonly NotifyIcon _tray;
+    private readonly ToolStripMenuItem _recentMenu;
+    private readonly LinkedList<Utterance> _recent = new();
+
+    private SessionState _state = SessionState.Idle;
+    private IntPtr _pinnedWindow;
+    private TargetContext _pinnedTarget = TargetContext.Unknown;
+    private long _pressedAtTicks;
+
+    internal DictateApp(DictateConfig config, DictationPipeline pipeline)
+    {
+        _config = config;
+        _pipeline = pipeline;
+
+        _icons = new TrayIcons();
+        _overlay = new Overlay();
+        _feedback = new Feedback(config.PlaySounds);
+        _recorder = new AudioRecorder(config.MaximumRecordingSeconds);
+        _recorder.LimitReached += OnRecordingLimitReached;
+
+        _recentMenu = new ToolStripMenuItem("Recent") { Enabled = false };
+
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(_recentMenu);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Open config folder", null, (_, _) => OpenConfigFolder());
+        menu.Items.Add("Re-enter API keys…", null, (_, _) => ReAuthenticate());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Quit", null, (_, _) => Quit());
+
+        _tray = new NotifyIcon
+        {
+            Icon = _icons.For(SessionState.Idle),
+            Text = "dictate — idle",
+            Visible = true,
+            ContextMenuStrip = menu,
+        };
+
+        // Installed last: once the hook is live the callbacks can arrive, and
+        // they assume everything above exists.
+        _hotkey = new HotkeyListener(config.HotkeyVirtualKey, config.SuppressHotkey);
+        _hotkey.Pressed += OnHotkeyPressed;
+        _hotkey.Released += OnHotkeyReleased;
+    }
+
+    // --- state ---------------------------------------------------------------
+
+    private void SetState(SessionState state)
+    {
+        _state = state;
+        _tray.Icon = _icons.For(state);
+        _tray.Text = state switch
+        {
+            SessionState.Recording => "dictate — recording",
+            SessionState.Transcribing => "dictate — transcribing",
+            _ => "dictate — idle",
+        };
+
+        if (_config.ShowOverlay)
+        {
+            _overlay.ShowState(state);
+        }
+    }
+
+    // --- hotkey --------------------------------------------------------------
+
+    private void OnHotkeyPressed()
+    {
+        // FR-5.1: one session at a time. A press while transcribing is ignored
+        // rather than queued — two utterances in flight is how audio from one
+        // ends up delivered into the target of the other.
+        if (_state != SessionState.Idle)
+        {
+            return;
+        }
+
+        if (!AudioRecorder.HasInputDevice)
+        {
+            _feedback.Error();
+            Notify("No microphone", "dictate found no audio input device.");
+            return;
+        }
+
+        // FR-6.1: the target is recorded now and never re-read.
+        _pinnedWindow = WindowInspector.Foreground();
+        _pinnedTarget = WindowInspector.Describe(_pinnedWindow, _config.ExtraConsoleProcesses);
+        _pressedAtTicks = Stopwatch.GetTimestamp();
+
+        try
+        {
+            _recorder.Start();
+        }
+        catch (Exception ex)
+        {
+            _feedback.Error();
+            Notify("Could not start recording", ex.Message);
+            return;
+        }
+
+        SetState(SessionState.Recording);
+        _feedback.Start();
+    }
+
+    private async void OnHotkeyReleased()
+    {
+        if (_state != SessionState.Recording)
+        {
+            return;
+        }
+
+        var held = Stopwatch.GetElapsedTime(_pressedAtTicks);
+        var pcm = _recorder.Stop();
+
+        // FR-5.2: an accidental tap costs nothing and says nothing.
+        if (held.TotalMilliseconds < _config.MinimumHoldMs)
+        {
+            SetState(SessionState.Idle);
+            return;
+        }
+
+        SetState(SessionState.Transcribing);
+        _feedback.Stop();
+
+        Utterance utterance;
+        try
+        {
+            utterance = await _pipeline.ProcessAsync(pcm, _pinnedTarget);
+        }
+        catch (Exception ex)
+        {
+            // The pipeline degrades internally; reaching here means something
+            // outside its contract broke. Never let it kill the message loop.
+            utterance = Utterance.Fail(ex.Message);
+        }
+
+        SetState(SessionState.Idle);
+        Deliver(utterance);
+    }
+
+    private void OnRecordingLimitReached()
+    {
+        // Raised on the recorder's callback thread.
+        if (_overlay.IsHandleCreated)
+        {
+            _overlay.BeginInvoke(() =>
+            {
+                _feedback.Error();
+                Notify("Recording limit reached",
+                    $"Stopped after {_config.MaximumRecordingSeconds}s. Transcribing what was captured.");
+            });
+        }
+    }
+
+    // --- delivery ------------------------------------------------------------
+
+    private void Deliver(Utterance utterance)
+    {
+        if (utterance.Status == UtteranceStatus.Failed)
+        {
+            _feedback.Error();
+            Notify("Dictation failed", utterance.Error ?? "Unknown error.");
+            return;
+        }
+
+        if (!utterance.HasText)
+        {
+            return;
+        }
+
+        Remember(utterance);
+
+        if (utterance.Status == UtteranceStatus.CleanupFailed)
+        {
+            // Delivered verbatim rather than lost (FR-7.1), but the user is told
+            // so an unusually rough sentence is explained rather than puzzling.
+            Notify("Delivered without cleanup", utterance.Error ?? "Cleanup failed.");
+        }
+
+        // FR-6.2: the window that had focus at press time, or nothing.
+        if (WindowInspector.Foreground() != _pinnedWindow)
+        {
+            ToClipboard(utterance.Text, "Focus changed", "The text is on the clipboard — press Ctrl+V.");
+            return;
+        }
+
+        try
+        {
+            TextInjector.Type(utterance.Text, _config.InjectionChunkSize, _config.InjectionChunkDelayMs);
+        }
+        catch (Exception ex)
+        {
+            ToClipboard(utterance.Text, "Could not type the text", ex.Message);
+        }
+    }
+
+    private void ToClipboard(string text, string title, string detail)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+            Notify(title, detail);
+        }
+        catch (Exception ex)
+        {
+            _feedback.Error();
+            Notify("Text could not be delivered", $"{detail} Clipboard also failed: {ex.Message}");
+        }
+    }
+
+    // --- recent utterances (memory only) -------------------------------------
+
+    private void Remember(Utterance utterance)
+    {
+        _recent.AddFirst(utterance);
+        while (_recent.Count > RecentCapacity)
+        {
+            _recent.RemoveLast();
+        }
+
+        _recentMenu.DropDownItems.Clear();
+        foreach (var item in _recent)
+        {
+            var label = item.Text.Length > 60 ? item.Text[..60] + "…" : item.Text;
+            var text = item.Text;
+            _recentMenu.DropDownItems.Add(label, null, (_, _) => Clipboard.SetText(text));
+        }
+
+        _recentMenu.Enabled = _recentMenu.DropDownItems.Count > 0;
+    }
+
+    // --- menu ----------------------------------------------------------------
+
+    private static void OpenConfigFolder()
+    {
+        var folder = Paths.ConfigFolder;
+        Directory.CreateDirectory(folder);
+        Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+    }
+
+    private void ReAuthenticate()
+    {
+        if (AuthForm.Prompt())
+        {
+            Notify("Keys stored", "Restart dictate for the new keys to take effect.");
+        }
+    }
+
+    private void Notify(string title, string detail) =>
+        _tray.ShowBalloonTip(4000, title, detail, ToolTipIcon.None);
+
+    private void Quit()
+    {
+        _tray.Visible = false;
+        ExitThread();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _hotkey.Dispose();
+            _recorder.Dispose();
+            _tray.Dispose();
+            _icons.Dispose();
+            _overlay.Dispose();
+            _recent.Clear(); // FR-17.2: nothing outlives the process
+        }
+
+        base.Dispose(disposing);
+    }
+}

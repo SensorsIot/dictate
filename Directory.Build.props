@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Not TreatWarningsAsErrors: every build happens in CI, so a warning
+         promoted to an error costs a full round trip to discover. -->
+  </PropertyGroup>
+</Project>

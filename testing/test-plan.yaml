@@ -1,0 +1,384 @@
+# dictate — test plan
+#
+# One entry per test: its tier, the requirements it discharges, what it needs,
+# and what it last produced. The traceability matrix is generated from this file
+# plus @fsd tags in the source. Never hand-maintain a "covered" column.
+#
+# status:      designed | implemented | blocked
+# last_result: never_run | pass | fail   (+ run_id when evidence exists)
+#
+# A test that is `implemented` but `never_run` discharges nothing. That is the
+# honest position for every host test below: there is no .NET SDK in the
+# devcontainer (decisions.md D-15), so nothing here has executed yet. The first
+# CI run on push is what turns these green — or not.
+
+version: 1
+updated: 2026-08-16
+
+tiers:
+  host:
+    runs_on: ubuntu-latest
+    trigger: every push
+    reaches: Dictate.Core only
+  ci:
+    runs_on: windows-latest
+    trigger: tag push
+    reaches: compilation and publish
+  desktop:
+    runs_on: the user's Windows 11 machine
+    trigger: by hand
+    reaches: hotkey, microphone, SendInput, focus, tray
+    automatable: false
+    why_not: >
+      Needs a real low-level keyboard hook, a real input device and a real
+      foreground window. No CI runner in this project's infrastructure provides
+      any of the three. Stated rather than implied so nobody looks for the job.
+
+tests:
+
+  # ---- host tier: implemented -----------------------------------------------
+
+  - id: H-01
+    name: Console target collapses every newline to a space
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    verifies: [FR-6.4]
+    must_not: any \r or \n survives into text bound for a console
+    status: implemented
+    last_result: never_run
+    note: >
+      The highest-consequence test in the suite. A newline typed into a shell is
+      Enter, and Enter runs whatever is on the line.
+
+  - id: H-02
+    name: Non-console target keeps paragraphs, capping blank runs at one
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    verifies: [FR-6.4]
+    status: implemented
+    last_result: never_run
+
+  - id: H-03
+    name: Console classification by process name, class and user list
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    verifies: [FR-6.5]
+    status: implemented
+    last_result: never_run
+    gap: >
+      Covers the process-name and user-list arms only. The ConsoleWindowClass arm
+      lives in Dictate.Windows and is unreachable from the host tier — see D-05.
+
+  - id: H-04
+    name: Cleanup failure falls back to the raw transcript
+    kind: atomic
+    scenario: deviation
+    tier: host
+    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    verifies: [FR-7.1]
+    must_not: the utterance is dropped, or an exception escapes the pipeline
+    status: implemented
+    last_result: never_run
+
+  - id: H-05
+    name: Empty cleanup output is a failure, not a deletion
+    kind: atomic
+    scenario: deviation
+    tier: host
+    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    verifies: [FR-7.1]
+    status: implemented
+    last_result: never_run
+
+  - id: H-06
+    name: Transcription failure delivers nothing and reports why
+    kind: atomic
+    scenario: deviation
+    tier: host
+    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    verifies: [FR-7.2, FR-7.4]
+    status: implemented
+    last_result: never_run
+
+  - id: H-07
+    name: Silence ends the session without text
+    kind: atomic
+    scenario: deviation
+    tier: host
+    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    verifies: [FR-7.3]
+    status: implemented
+    last_result: never_run
+
+  - id: H-08
+    name: Empty audio never reaches the network
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    verifies: [FR-5.2]
+    must_not: a billable request for an utterance with no audio
+    status: implemented
+    last_result: never_run
+
+  - id: H-09
+    name: Pinned language and target context reach their stages
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    verifies: [FR-10.3, FR-11.7]
+    status: implemented
+    last_result: never_run
+
+  - id: H-10
+    name: WAV header declares 16 kHz mono 16-bit and correct sizes
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
+    verifies: [FR-9.1]
+    status: implemented
+    last_result: never_run
+
+  - id: H-11
+    name: Scribe response parsing extracts text and language, rejects malformed
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
+    verifies: [FR-10.5]
+    status: implemented
+    last_result: never_run
+
+  - id: H-12
+    name: Cleanup prompt forbids translating and answering, and carries vocabulary
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
+    verifies: [FR-11.4, FR-11.5, FR-11.6]
+    must_not: the no-translation clause is absent
+    status: implemented
+    last_result: never_run
+    note: >
+      Verifies the prompt says it, not that the model obeys it. Obedience is
+      D-03's risk and is checked at the desktop tier.
+
+  # ---- host tier: designed, not yet implemented ------------------------------
+
+  - id: H-13
+    name: Scribe request omits language_code on Auto and sends it when pinned
+    kind: atomic
+    scenario: standard
+    tier: host
+    verifies: [FR-10.3, FR-10.4]
+    status: designed
+    needs: a fake HttpMessageHandler capturing the multipart body
+
+  - id: H-14
+    name: Malformed config.json is a startup error, not a silent default
+    kind: atomic
+    scenario: negative
+    tier: host
+    verifies: [FR-16.2]
+    must_not: defaults applied silently
+    status: designed
+
+  - id: H-15
+    name: Missing config.json yields the documented defaults
+    kind: atomic
+    scenario: standard
+    tier: host
+    verifies: [FR-16.1]
+    status: designed
+
+  # ---- ci tier ---------------------------------------------------------------
+
+  - id: C-01
+    name: Solution restores, builds and host tests pass on Linux
+    kind: atomic
+    scenario: standard
+    tier: ci
+    file: .github/workflows/ci.yml
+    verifies: [FR-20.1, FR-20.3]
+    must_not: a Windows-only dependency reaches Dictate.Core
+    status: implemented
+    last_result: never_run
+
+  - id: C-02
+    name: Tagged build publishes a self-contained single-file exe
+    kind: atomic
+    scenario: standard
+    tier: ci
+    file: .github/workflows/release.yml
+    verifies: [FR-20.2]
+    status: implemented
+    last_result: never_run
+
+  # ---- desktop tier: all designed, none executed ------------------------------
+
+  - id: D-01
+    name: Hotkey press and release drive the session from any focused app
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [FR-8.1, FR-8.2]
+    status: designed
+
+  - id: D-02
+    name: A tap shorter than MinimumHoldMs is discarded silently
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-5.2]
+    status: designed
+
+  - id: D-03
+    name: Focus change before delivery routes text to the clipboard
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-6.1, FR-6.2]
+    must_not: a single character typed into the window that took focus
+    status: designed
+    evidence_required: screen recording plus clipboard dump
+
+  - id: D-04
+    name: Dictating into a terminal produces one line and no execution
+    kind: atomic
+    scenario: negative
+    tier: desktop
+    verifies: [FR-6.4, FR-6.5]
+    must_not: the command line executes
+    status: designed
+
+  - id: D-05
+    name: A conhost-class window is classified as a console
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [FR-6.5]
+    status: designed
+    note: closes the gap declared on H-03
+
+  - id: D-06
+    name: Self-typed text does not re-trigger the hotkey
+    kind: atomic
+    scenario: negative
+    tier: desktop
+    verifies: [FR-8.3]
+    status: designed
+
+  - id: D-07
+    name: Recording stops at the maximum and still transcribes
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-5.3]
+    status: designed
+
+  - id: D-08
+    name: A second press during transcription is ignored
+    kind: atomic
+    scenario: negative
+    tier: desktop
+    verifies: [FR-5.1]
+    status: designed
+
+  - id: D-09
+    name: No audio or transcript is written anywhere during ten utterances
+    kind: atomic
+    scenario: security
+    tier: desktop
+    verifies: [FR-17.1]
+    must_not: a crash dump or trace file containing utterance text
+    status: designed
+    evidence_required: file-system audit log over %APPDATA%, %TEMP% and cwd
+
+  - id: D-10
+    name: Keys are stored in Credential Manager and appear in no file
+    kind: atomic
+    scenario: security
+    tier: desktop
+    verifies: [FR-15.1, FR-15.3]
+    status: designed
+
+  - id: D-11
+    name: Mixed German/English utterance is not translated
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [FR-11.4]
+    must_not: any part returned in the other language
+    status: designed
+
+  - id: D-12
+    name: Vocabulary terms are spelled as configured
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [FR-11.6]
+    status: designed
+
+  - id: D-13
+    name: Surrogate-pair characters are typed correctly
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-12.2]
+    status: designed
+
+  - id: D-14
+    name: Elevated foreground window produces a reported failure, not silence
+    kind: atomic
+    scenario: negative
+    tier: desktop
+    verifies: [FR-12.4]
+    status: designed
+
+  - id: D-15
+    name: Published exe runs on a machine with no .NET installed
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [FR-20.4]
+    status: designed
+
+  # ---- workflow: the acceptance gate -----------------------------------------
+
+  - id: W-01
+    name: Standard journey — launch to typed sentence
+    kind: workflow
+    scenario: standard
+    tier: desktop
+    verifies: [FR-5.1, FR-6.1, FR-9.2, FR-10.1, FR-11.1, FR-11.3, FR-14.1, FR-17.1]
+    steps: docs/Functionality/FSD.md §1.3
+    must_not:
+      - the first syllable is missing
+      - the text is translated
+      - any file is written
+    status: blocked
+    blocked_by: O-01
+    note: >
+      Deliberately independent of its children. Every atomic test above can pass
+      while this one fails — each of those arranges the rig to suit itself,
+      whereas this proves that what one step produces is what the next consumes.
+      Blocked until the user confirms the journey in FSD §1.3 is the run they
+      actually expect.
+
+# ---- honest position --------------------------------------------------------
+#
+# 12 host tests implemented, 3 designed. 2 CI checks implemented.
+# 15 desktop tests designed, 0 implemented, 0 executed.
+# 1 workflow, blocked on O-01.
+#
+# Zero requirements are verified: nothing has been executed yet. Every entry
+# above is at "test designed" or "test implemented" on the lifecycle. The first
+# CI run moves the host and ci tiers forward; the desktop tier waits on P2.

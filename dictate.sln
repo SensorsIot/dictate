@@ -1,0 +1,31 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dictate.Core", "src\Dictate.Core\Dictate.Core.csproj", "{E57CEC72-F967-4E90-8D07-B60AF0D3AB45}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dictate.Windows", "src\Dictate.Windows\Dictate.Windows.csproj", "{EB604E13-81B9-47FD-8293-22CFF918E7F1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dictate.Core.Tests", "tests\Dictate.Core.Tests\Dictate.Core.Tests.csproj", "{745B94F1-7325-4109-B469-D4D1113598D3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E57CEC72-F967-4E90-8D07-B60AF0D3AB45}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E57CEC72-F967-4E90-8D07-B60AF0D3AB45}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E57CEC72-F967-4E90-8D07-B60AF0D3AB45}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E57CEC72-F967-4E90-8D07-B60AF0D3AB45}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB604E13-81B9-47FD-8293-22CFF918E7F1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB604E13-81B9-47FD-8293-22CFF918E7F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB604E13-81B9-47FD-8293-22CFF918E7F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB604E13-81B9-47FD-8293-22CFF918E7F1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{745B94F1-7325-4109-B469-D4D1113598D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{745B94F1-7325-4109-B469-D4D1113598D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{745B94F1-7325-4109-B469-D4D1113598D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{745B94F1-7325-4109-B469-D4D1113598D3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

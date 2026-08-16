@@ -1,0 +1,64 @@
+name: CI
+
+# The only place this project is compiled. There is no .NET SDK in the
+# devcontainer (docs/decisions.md D-15), so a red build here is the first
+# notification that anything is wrong.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    name: Host tier (Dictate.Core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/Dictate.Core.Tests/Dictate.Core.Tests.csproj
+
+      # Running the core tests on Linux is what enforces FR-20.3: if a
+      # Windows-only dependency ever reaches Dictate.Core, this step stops
+      # compiling and the testable half of the project would otherwise have
+      # slipped out of CI unnoticed.
+      - name: Test
+        run: >
+          dotnet test tests/Dictate.Core.Tests/Dictate.Core.Tests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=host-tests.trx"
+          --logger "console;verbosity=normal"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: warn
+
+  compile-windows-head:
+    name: Windows head compiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # Dictate.Windows sets EnableWindowsTargeting, so a Linux runner can
+      # restore and compile it even though it can never run it. This catches
+      # P/Invoke signature and WinForms errors on every push instead of at
+      # release time.
+      - name: Build solution
+        run: dotnet build dictate.sln --configuration Release

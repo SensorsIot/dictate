@@ -9,7 +9,19 @@ is injected with `SendInput`. German and English, auto-detected.
 
 Nothing is written to disk: no audio files, no transcript history.
 
-> Status: early. See [`docs/DESIGN.md`](docs/DESIGN.md) for the decisions behind it.
+> **Status: early.** `Dictate.Core` is complete and unit-tested; the Windows
+> client is written but has not yet been run on a real machine. Nothing has been
+> verified end to end — see [`testing/test-plan.yaml`](testing/test-plan.yaml)
+> for the honest position.
+
+## Documentation
+
+| | |
+|---|---|
+| [What it must do](docs/Functionality/FSD.md) | Functional specification |
+| [How it is built](docs/Harness/00-Overview.md) | Build rules, seams, testing standard |
+| [How to run it](docs/UserDocumentation/Manual.md) | Install, use, configure, recover |
+| [Why it is like this](docs/decisions.md) | Decisions and rejected alternatives |
 
 ## Install
 

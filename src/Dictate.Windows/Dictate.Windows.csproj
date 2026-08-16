@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <RootNamespace>Dictate.Windows</RootNamespace>
+    <AssemblyName>dictate</AssemblyName>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Lets a Linux CI job restore and compile this Windows-targeted project.
+         It cannot run here, but it does have to compile here. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- Shipping shape: one file, no runtime to install on the PC. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Not trimmed: NAudio and the Anthropic SDK both reflect, and a trimmed
+         build that fails does so at runtime on your machine, not in CI. -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dictate.Core\Dictate.Core.csproj" />
+  </ItemGroup>
+
+</Project>
