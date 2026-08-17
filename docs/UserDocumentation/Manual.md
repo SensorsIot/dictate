@@ -81,7 +81,7 @@ The settings you are most likely to want:
 | `MaximumRecordingSeconds` | `120` | Hard stop, so a stuck key cannot upload your afternoon |
 | `AlwaysCopyToClipboard` | `true` | Also put each utterance on the clipboard, so a misdirected one is one Ctrl+V away |
 | `PlaySounds` / `ShowOverlay` | `true` | Turn the feedback off |
-| `FeedbackIdleSeconds` | `300` | How long the sound device stays open after the last beep. Not just about beeps: opening it stalls the microphone for seconds, so a dictation starting while it is closed loses the start of your sentence. Lower it only if dictate interferes with other audio |
+| `FeedbackIdleSeconds` | `30` | How long the sound device stays open after the last beep. Kept short so dictate is not sitting on your speakers between dictations |
 | `OverlayPosition` | `BottomRight` | Where the recording indicator sits: `BottomRight`, `BottomLeft`, `TopRight`, `TopLeft`, or `NearCursor` to have it follow the mouse |
 | `EnableDiagnosticLog` | `false` | Write `%LOCALAPPDATA%\dictate\dictate.log` — timings and outcomes, never your text |
 | `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently |

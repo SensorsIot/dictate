@@ -411,8 +411,19 @@ tests:
     #   HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager
     #     \ConsentStore\microphone\NonPackaged\C:#...#dictate.exe
     oracle: consent-store LastUsedTimeStop becomes non-zero after release
-    status: designed
-    last_result: never_run
+    status: implemented
+    last_result: pass
+    evidence: >
+      On the Windows machine, hotkey held in a normal window until the overlay
+      showed, focus moved to an elevated PowerShell by clicking it, key released
+      there:
+        recording.start  pressToCapture=101ms
+        recording.stop   reason=Reconciled  held=11458ms
+        mic.close        confirmed=True
+      The key-up never reached the hook and the reconciler ended the session; the
+      consent store recorded the capture handle released. Note the Start menu
+      opens on the release, since suppression cannot apply to input the hook
+      never sees.
     steps: >
       Needs the key-up to be genuinely lost, which means UIPI rather than a
       trick: open a window running as administrator, hold the hotkey, click into
@@ -511,6 +522,28 @@ tests:
       including eleven inside three seconds, every one mic.close confirmed=True.
       Encouraging, but well short of the count this test asks for, and the race
       it targets is intermittent.
+
+  - id: DT-24
+    name: A cold output device does not delay the microphone's first buffer
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [NFR-19.6]
+    oracle: mic.firstBuffer under 250ms on a press where feedback.open also occurs
+    steps: >
+      Set FeedbackIdleSeconds to 10, restart, wait past it so the device closes,
+      then press. Both feedback.open and mic.firstBuffer appear on the same
+      press; the test is whether they are independent.
+    status: implemented
+    last_result: pass
+    evidence: >
+      Against 0.1.17, output device closed by a 10 s idle timeout:
+        recording.start  pressToCapture=5ms
+        feedback.open    took=12ms
+        mic.firstBuffer  after=75ms
+      Capture unaffected. The same test against 0.1.16, where both APIs were
+      winmm, gave feedback.open took=3220ms and mic.firstBuffer after=3258ms —
+      34 ms apart, and roughly 3.2 s of the utterance lost.
 
   - id: DT-23
     name: A hotkey held while dictate starts does not leave the key stuck down

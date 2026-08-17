@@ -646,6 +646,25 @@ connection.
 
 **NFR-19.2** [Must] `[derived]` Neither network call shall block the UI thread.
 
+**NFR-19.6** [Must] `[derived]` Feedback output and capture shall not share an
+audio API.
+
+> Capture is winmm (FR-9.1); the tones are WASAPI. Opening a winmm output device
+> stalls a live winmm capture stream for the duration of the open, and the stall
+> is paid in lost audio at the start of the utterance — enough of it that a
+> German sentence came back transcribed as Serbian. Separating the APIs removes
+> the contention rather than scheduling around it, and it also makes a re-open
+> cheap: the expensive part is per-process rather than per-open.
+>
+> WASAPI is right here for the same reason it is wrong for capture. Shared mode
+> lets the device name the format, which would put a resampler in the capture
+> hot path — but the tones are synthesised, so they are simply generated in
+> whatever format the device asks for, once, when it opens.
+>
+> **VC** — *Pre:* output device closed (idle past `FeedbackIdleSeconds`).
+> *Stimulus:* press and hold. *Expect:* `mic.firstBuffer` under 250 ms
+> regardless of what `feedback.open` on the same press cost. *Tier:* desktop.
+
 **NFR-19.5** [Must] `[derived]` No audio-device open shall happen on the UI
 thread.
 
@@ -653,10 +672,8 @@ thread.
 > endpoints — and the UI thread is where the session state machine runs. Hotkey
 > events reach it through `BeginInvoke`, so a block there stops the *release*
 > being processed: the user holds the key, lets go, and nothing happens until an
-> unrelated sound device has finished opening. Opening the output device also
-> stalls the capture stream, so the cost is paid in lost audio as well as in
-> latency — which is why the feedback device is warmed at startup and kept open
-> across the pauses in normal use (`FeedbackIdleSeconds`).
+> unrelated sound device has finished opening. The feedback device is therefore
+> warmed at startup, off the UI thread, and tones are queued from a worker.
 >
 > **VC** — *Pre:* dictate idle for over a minute. *Stimulus:* press and hold.
 > *Expect:* `recording.start` is written within 250 ms of the press — compare its

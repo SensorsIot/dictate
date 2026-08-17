@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace Dictate.Windows;
@@ -11,22 +12,37 @@ namespace Dictate.Windows;
 /// finish a sentence trains you to ignore it. These are three short tones that
 /// differ only in pitch, so the cue is legible without being an event.
 ///
-/// The output device is opened on the first tone and closed again after 30
-/// seconds of quiet. Two failure modes are being avoided at once: opening it per
-/// beep would put device-open latency between the key press and the cue, while
-/// holding it open for the life of the process — which is what this class did
-/// first — means dictate keeps a stream on the speakers around the clock,
-/// stopping the endpoint idling and interfering with whatever else uses it.
-/// Within a dictation every beep is instant; between them dictate is not there.
+/// **Output goes through WASAPI, deliberately, while capture goes through
+/// winmm.** They must not share a layer: opening a winmm output device stalls a
+/// live winmm capture stream for as long as the open takes, which is seconds on
+/// a machine with many endpoints, and the stall is paid in lost audio at the
+/// start of the utterance. Keeping the two on different APIs removes the
+/// contention rather than scheduling around it.
+///
+/// WASAPI is right for output for the same reason it is wrong for capture. In
+/// shared mode the device dictates the format, so capture would need a resampler
+/// in the hot path — but these tones are synthesised, so they are simply
+/// generated in whatever format the device asks for, once, when it opens.
+///
+/// The device is opened at startup and closed again after
+/// <see cref="DictateConfig.FeedbackIdleSeconds"/> of quiet, so dictate is not
+/// holding a stream on the speakers around the clock.
 /// </summary>
 internal sealed class Feedback : IDisposable
 {
-    private const int SampleRate = 44_100;
+    // Rising for "listening", a lower falling note for "done". A major sixth
+    // apart, so they are unmistakable even at low volume. The error note is
+    // clearly not one of the other two.
+    private static readonly (double Hz, int Ms) StartTone = (988, 70);   // B5
+    private static readonly (double Hz, int Ms) StopTone = (587, 70);    // D5
+    private static readonly (double Hz, int Ms) ErrorTone = (196, 180);  // G3
 
     private readonly bool _enabled;
-    private readonly byte[] _start;
-    private readonly byte[] _stop;
-    private readonly byte[] _error;
+
+    // Rendered when the device opens, in that device's own format.
+    private byte[]? _start;
+    private byte[]? _stop;
+    private byte[]? _error;
 
     /// <summary>
     /// How long the output device stays open after the last tone. See
@@ -37,7 +53,7 @@ internal sealed class Feedback : IDisposable
 
     private readonly object _gate = new();
 
-    private WaveOutEvent? _output;
+    private WasapiOut? _output;
     private BufferedWaveProvider? _sink;
     private System.Threading.Timer? _idle;
 
@@ -78,12 +94,6 @@ internal sealed class Feedback : IDisposable
     {
         _enabled = enabled;
         _idleTimeout = TimeSpan.FromSeconds(Math.Max(5, idleSeconds));
-
-        // Rising for "listening", a lower falling note for "done". A major
-        // sixth apart, so they are unmistakable even at low volume.
-        _start = Tone(988, 70);   // B5
-        _stop = Tone(587, 70);    // D5
-        _error = Tone(196, 180);  // G3 — clearly not one of the other two
     }
 
     private void OpenOutput()
@@ -97,7 +107,16 @@ internal sealed class Feedback : IDisposable
 
         try
         {
-            _sink = new BufferedWaveProvider(new WaveFormat(SampleRate, 16, 1))
+            // 60 ms rather than 100: a 70 ms tone is less than one buffer period
+            // at 100, so it straddles a boundary and part of it can be cut.
+            _output = new WasapiOut(AudioClientShareMode.Shared, false, 60);
+
+            // Shared mode means the device names the format and we meet it —
+            // which costs nothing here, because the tones have not been rendered
+            // yet and are synthesised straight into it.
+            var format = _output.OutputWaveFormat;
+
+            _sink = new BufferedWaveProvider(format)
             {
                 // Small: this only ever holds one short tone. A large buffer
                 // would let beeps queue up behind each other.
@@ -112,19 +131,21 @@ internal sealed class Feedback : IDisposable
                 ReadFully = true,
             };
 
-            // 60 ms rather than 100: a 70 ms tone was less than one buffer
-            // period, so it straddled a boundary and part of it could be cut.
-            _output = new WaveOutEvent { DesiredLatency = 60, NumberOfBuffers = 3 };
             _output.Init(_sink);
             _output.Play(); // plays silence until something is written
+
+            _start = Tone(format, StartTone.Hz, StartTone.Ms);
+            _stop = Tone(format, StopTone.Hz, StopTone.Ms);
+            _error = Tone(format, ErrorTone.Hz, ErrorTone.Ms);
         }
         catch (Exception)
         {
-            // No output device, or one that refuses these settings. Dictation
+            // No output device, or one whose format we cannot render. Dictation
             // works fine without cues; failing here must not stop startup.
             _output?.Dispose();
             _output = null;
             _sink = null;
+            _start = _stop = _error = null;
         }
 
         DeviceOpened?.Invoke(Stopwatch.GetElapsedTime(started));
@@ -143,16 +164,29 @@ internal sealed class Feedback : IDisposable
     /// fade the abrupt start and stop produce an audible click that is louder
     /// than the tone itself.
     /// </summary>
-    private static byte[] Tone(double frequency, int milliseconds, double amplitude = 0.22)
+    private static byte[] Tone(WaveFormat format, double frequency, int milliseconds, double amplitude = 0.22)
     {
-        var samples = SampleRate * milliseconds / 1000;
+        var rate = format.SampleRate;
+        var channels = format.Channels;
+        var bytesPerSample = format.BitsPerSample / 8;
+        var isFloat = format.Encoding == WaveFormatEncoding.IeeeFloat;
+
+        if (!isFloat && format.BitsPerSample != 16)
+        {
+            // An exotic shared-mode format. Silence beats noise, and dictation
+            // does not depend on the cue.
+            return [];
+        }
+
+        var samples = rate * milliseconds / 1000;
 
         // Trailing silence, so playback ends on quiet rather than on the buffer
         // running dry mid-stream. An underrun at the tail is heard as a click or
         // a fragment of the previous tone.
-        var tail = SampleRate * 80 / 1000;
-        var buffer = new byte[(samples + tail) * 2];
-        var fade = Math.Min(samples / 2, SampleRate * 6 / 1000); // 6 ms
+        var tail = rate * 80 / 1000;
+        var frameSize = bytesPerSample * channels;
+        var buffer = new byte[(samples + tail) * frameSize];
+        var fade = Math.Min(samples / 2, rate * 6 / 1000); // 6 ms
 
         for (var i = 0; i < samples; i++)
         {
@@ -166,11 +200,25 @@ internal sealed class Feedback : IDisposable
                 envelope = 0.5 * (1 - Math.Cos(Math.PI * (samples - 1 - i) / fade));
             }
 
-            var value = Math.Sin(2 * Math.PI * frequency * i / SampleRate) * amplitude * envelope;
-            var sample = (short)(value * short.MaxValue);
+            var value = Math.Sin(2 * Math.PI * frequency * i / rate) * amplitude * envelope;
 
-            buffer[i * 2] = (byte)(sample & 0xFF);
-            buffer[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
+            // The same sample into every channel: a mono cue, wherever the
+            // device happens to put its speakers.
+            for (var channel = 0; channel < channels; channel++)
+            {
+                var offset = (i * channels + channel) * bytesPerSample;
+
+                if (isFloat)
+                {
+                    BitConverter.TryWriteBytes(buffer.AsSpan(offset), (float)value);
+                }
+                else
+                {
+                    var sample = (short)(value * short.MaxValue);
+                    buffer[offset] = (byte)(sample & 0xFF);
+                    buffer[offset + 1] = (byte)((sample >> 8) & 0xFF);
+                }
+            }
         }
 
         return buffer;
@@ -187,17 +235,17 @@ internal sealed class Feedback : IDisposable
     /// the beep finishes opening a sound device. A late tone is cosmetic; a
     /// frozen pump is not.
     /// </summary>
-    private void Play(byte[] tone)
+    private void Play(Func<byte[]?> pick)
     {
         if (!_enabled)
         {
             return;
         }
 
-        _ = Task.Run(() => PlayCore(tone));
+        _ = Task.Run(() => PlayCore(pick));
     }
 
-    private void PlayCore(byte[] tone)
+    private void PlayCore(Func<byte[]?> pick)
     {
         lock (_gate)
         {
@@ -208,12 +256,19 @@ internal sealed class Feedback : IDisposable
                 return;
             }
 
+            // Picked after the open, because the tones are rendered in the
+            // device's format and do not exist until it has one.
+            var tone = pick();
+            if (tone is null || tone.Length == 0)
+            {
+                return;
+            }
+
             try
             {
-                // Clear first. 0.1.7 dropped this on the reasoning that the two
-                // tones "cannot overlap in practice" — wrong: without it queued
-                // tones accumulate and play back in sequence, heard as the beep
-                // repeating. Never more than one tone pending.
+                // Clear first, or queued tones accumulate and play back in
+                // sequence, heard as the beep repeating. Never more than one
+                // tone pending.
                 _sink.ClearBuffer();
                 _sink.AddSamples(tone, 0, tone.Length);
             }
@@ -248,13 +303,14 @@ internal sealed class Feedback : IDisposable
         _output?.Dispose();
         _output = null;
         _sink = null;
+        _start = _stop = _error = null;
     }
 
-    internal void Start() => Play(_start);
+    internal void Start() => Play(() => _start);
 
-    internal void Stop() => Play(_stop);
+    internal void Stop() => Play(() => _stop);
 
-    internal void Error() => Play(_error);
+    internal void Error() => Play(() => _error);
 
     public void Dispose()
     {

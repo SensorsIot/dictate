@@ -150,19 +150,13 @@ public sealed class DictateConfig
     /// <summary>
     /// How long the feedback output device stays open after the last tone.
     ///
-    /// This is not about the beep. Opening the output device stalls the capture
-    /// stream — both go through winmm — so a dictation that starts while the
-    /// device is closed loses its first seconds of audio, measured at 3.2 s on
-    /// one machine and enough to have an utterance transcribed as the wrong
-    /// language. The device must therefore already be open when a session
-    /// starts, which means staying open across the pauses in normal use.
-    ///
-    /// The counter-pressure is that a device held open around the clock keeps
-    /// dictate sitting on the output endpoint, stopping it idling and
-    /// interfering with whatever else uses it. Five minutes keeps it warm for a
-    /// working session and lets it go when the user has actually stopped.
+    /// Short on purpose. A device held open keeps dictate sitting on the output
+    /// endpoint, stopping it idling and interfering with whatever else uses it,
+    /// and there is nothing to buy by holding it longer: the expensive part of
+    /// opening an output device is per-process, paid once at startup, and a
+    /// re-open afterwards costs milliseconds.
     /// </summary>
-    public int FeedbackIdleSeconds { get; set; } = 300;
+    public int FeedbackIdleSeconds { get; set; } = 30;
     public bool ShowOverlay { get; set; } = true;
 
     /// <summary>
