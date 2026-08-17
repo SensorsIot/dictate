@@ -292,12 +292,20 @@ tests:
     verifies: [FR-5.3]
     steps: >
       Hold the hotkey past MaximumRecordingSeconds — lower it to 10 in config
-      first rather than holding for two minutes. Expect an error beep and a
-      balloon at the limit, then the pipeline running on what was captured, and
-      recording.stop reason=Limit in the log. The eventual real key-up must be a
-      no-op, not a second session.
-    status: designed
-    last_result: never_run
+      first rather than holding for two minutes. Expect a balloon at the limit,
+      then the pipeline running on what was captured, and recording.stop
+      reason=Limit in the log. The eventual real key-up must be a no-op, not a
+      second session.
+    status: implemented
+    last_result: pass
+    evidence: >
+      MaximumRecordingSeconds set to 10, hotkey held for about 15 s:
+        recording.stop  reason=Limit  held=10458ms  audioMB=0.31
+        utterance       status=Ok  chars=37  lang=deu
+        delivery        method=typed  chars=38
+      Capture stopped at the cap, the balloon appeared, the pipeline ran on what
+      was captured and the truncated sentence was delivered. audioMB matches the
+      cap (10 s = 320,000 bytes), so the buffer filled rather than running short.
 
   - id: DT-08
     name: A second press during transcription is ignored
@@ -442,23 +450,20 @@ tests:
     # audio-device open being the case that costs audio as well as latency.
     oracle: recording.start timestamp minus (stop timestamp - held) < 250ms
     steps: >
-      Start dictate, wait past FeedbackIdleSeconds, then press and hold. Compute
-      the press time from the stop line as (stop timestamp - held) and compare it
-      against the recording.start timestamp. Repeat immediately for a second
-      press: the pair separates a first-use cost from a recurring one.
+      Start dictate, leave it idle for several minutes, then press and hold.
+      Compute the press time from the stop line as (stop timestamp - held) and
+      compare it against the recording.start timestamp. Repeat immediately for a
+      second press: the pair separates a first-use cost from a recurring one.
     status: implemented
-    last_result: fail
+    last_result: pass
     evidence: >
-      Two consecutive presses on the Windows machine against 0.1.16, first
-      dictation after a fresh start:
-        press 1  recording.start 23:24:00.764, press implied 23:24:00.149 -> 615ms
-        press 2  recording.start 23:24:34.974, press implied 23:24:34.964 ->  10ms
-      So a first-use cost, not a recurring one, and not the output device — that
-      had already opened at startup (feedback.open took=3306ms, logged 23:20:40).
-      What remains between _recorder.Start returning and the log line is
-      SetState, whose ShowState performs the overlay's first real Show. PreWarm
-      creates the overlay handle but never shows the window, so layout and paint
-      are still paid on the first dictation.
+      First dictation of a fresh process: recording.start 23:46:39.466 against a
+      press implied at 23:46:39.452 — 14 ms.
+    note: >
+      One earlier run showed 615 ms on a first press and 10 ms on the second,
+      which was recorded here as an overlay first-Show cost. That diagnosis did
+      not survive: the 14 ms reading above is also a first press on a fresh
+      process. The 615 ms is unexplained and has not recurred.
 
   - id: DT-21
     name: A suppressed hotkey held for three seconds is one session, not eleven
@@ -522,28 +527,6 @@ tests:
       including eleven inside three seconds, every one mic.close confirmed=True.
       Encouraging, but well short of the count this test asks for, and the race
       it targets is intermittent.
-
-  - id: DT-24
-    name: A cold output device does not delay the microphone's first buffer
-    kind: atomic
-    scenario: deviation
-    tier: desktop
-    verifies: [NFR-19.6]
-    oracle: mic.firstBuffer under 250ms on a press where feedback.open also occurs
-    steps: >
-      Set FeedbackIdleSeconds to 10, restart, wait past it so the device closes,
-      then press. Both feedback.open and mic.firstBuffer appear on the same
-      press; the test is whether they are independent.
-    status: implemented
-    last_result: pass
-    evidence: >
-      Against 0.1.17, output device closed by a 10 s idle timeout:
-        recording.start  pressToCapture=5ms
-        feedback.open    took=12ms
-        mic.firstBuffer  after=75ms
-      Capture unaffected. The same test against 0.1.16, where both APIs were
-      winmm, gave feedback.open took=3220ms and mic.firstBuffer after=3258ms —
-      34 ms apart, and roughly 3.2 s of the utterance lost.
 
   - id: DT-23
     name: A hotkey held while dictate starts does not leave the key stuck down

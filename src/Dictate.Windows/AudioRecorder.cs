@@ -89,33 +89,49 @@ internal sealed class AudioRecorder : IDisposable
             return;
         }
 
-        lock (_gate)
+        // Off the caller's thread for two reasons. NFR-19.5: this opens a
+        // capture device, and the caller is the UI thread. And the teardown
+        // below has to wait for the device to confirm it stopped, which is only
+        // possible where NAudio can deliver that callback — not on a thread that
+        // is blocking inside the wait.
+        _ = Task.Run(() =>
         {
-            if (_keepOpen)
+            lock (_gate)
             {
-                EnsureDeviceOpen();
-                return;
-            }
-
-            // Open and immediately close, so the first real press does not pay
-            // driver initialisation.
-            try
-            {
-                using var warm = new WaveInEvent
+                if (_keepOpen)
                 {
-                    WaveFormat = new WaveFormat(Wav.SampleRate, Wav.BitsPerSample, Wav.Channels),
-                    BufferMilliseconds = 50,
-                };
-                warm.StartRecording();
-                warm.StopRecording();
+                    EnsureDeviceOpen();
+                    return;
+                }
+
+                // Open and close again, so the first real press does not pay
+                // driver initialisation.
+                try
+                {
+                    var warm = new WaveInEvent
+                    {
+                        WaveFormat = new WaveFormat(Wav.SampleRate, Wav.BitsPerSample, Wav.Channels),
+                        BufferMilliseconds = 50,
+                    };
+
+                    warm.StartRecording();
+
+                    // Through TearDown rather than Dispose: StopRecording is
+                    // asynchronous, and disposing on the next line frees the
+                    // buffers while winmm may still own them. That is an access
+                    // violation inside waveInUnprepareHeader, not a managed
+                    // exception — it takes the process down with no chance to
+                    // report anything.
+                    TearDown(warm);
+                }
+                catch (Exception)
+                {
+                    // Pre-warming is an optimisation. If the device refuses now it
+                    // will report the real error on the first press, where there is
+                    // a user to tell.
+                }
             }
-            catch (Exception)
-            {
-                // Pre-warming is an optimisation. If the device refuses now it
-                // will report the real error on the first press, where there is
-                // a user to tell.
-            }
-        }
+        });
     }
 
     private void EnsureDeviceOpen()

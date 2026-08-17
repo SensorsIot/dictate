@@ -25,7 +25,6 @@ internal sealed class DictateApp : ApplicationContext
     private readonly AudioRecorder _recorder;
     private readonly HotkeyListener _hotkey;
     private readonly Overlay _overlay;
-    private readonly Feedback _feedback;
     private readonly TrayIcons _icons;
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _recentMenu;
@@ -46,8 +45,6 @@ internal sealed class DictateApp : ApplicationContext
 
         _icons = new TrayIcons();
         _overlay = new Overlay(config.OverlayPosition);
-        _feedback = new Feedback(config.PlaySounds, config.FeedbackIdleSeconds);
-        _feedback.DeviceOpened += took => _log.Event("feedback.open", ("took", took));
         _recorder = new AudioRecorder(config.MaximumRecordingSeconds, config.KeepMicrophoneOpen);
         _recorder.LimitReached += OnRecordingLimitReached;
         _recorder.DeviceClosed += confirmed => _log.Event("mic.close", ("confirmed", confirmed));
@@ -102,11 +99,6 @@ internal sealed class DictateApp : ApplicationContext
     {
         _ = _overlay.Handle;          // create the window now, not mid-utterance
         _recorder.PreWarm();
-
-        // The output device was the one first-use cost this method did not cover,
-        // and it was the largest of them: measured at 3.2 s on the user's machine,
-        // paid on the first press, on the UI thread.
-        _feedback.PreWarm();
 
         try
         {
@@ -180,7 +172,6 @@ internal sealed class DictateApp : ApplicationContext
 
         if (!AudioRecorder.HasInputDevice)
         {
-            _feedback.Error();
             Notify("No microphone", "dictate found no audio input device.");
             return;
         }
@@ -197,7 +188,6 @@ internal sealed class DictateApp : ApplicationContext
         }
         catch (Exception ex)
         {
-            _feedback.Error();
             Notify("Could not start recording", ex.Message);
             return;
         }
@@ -205,7 +195,6 @@ internal sealed class DictateApp : ApplicationContext
         _startLatency = Stopwatch.GetElapsedTime(pressedAt);
 
         SetState(SessionState.Recording);
-        _feedback.Start();
 
         // The origin is recorded because a press dictate did not expect is
         // otherwise indistinguishable from the user's thumb. Any process can
@@ -245,13 +234,11 @@ internal sealed class DictateApp : ApplicationContext
 
         if (reason == StopReason.Limit)
         {
-            _feedback.Error();
             Notify("Recording limit reached",
                 $"Stopped after {_config.MaximumRecordingSeconds}s. Transcribing what was captured.");
         }
 
         SetState(SessionState.Transcribing);
-        _feedback.Stop();
 
         // Deferred from press time: this is a process lookup, and here it runs
         // while the user is already waiting for the network anyway.
@@ -284,7 +271,6 @@ internal sealed class DictateApp : ApplicationContext
             // UI thread and takes the process down with it. A bug in delivery
             // should cost one utterance, not the running session — the user has
             // no other way to get the text back.
-            _feedback.Error();
             Notify("Delivery failed", ex.Message);
         }
     }
@@ -360,7 +346,6 @@ internal sealed class DictateApp : ApplicationContext
     {
         if (utterance.Status == UtteranceStatus.Failed)
         {
-            _feedback.Error();
             Notify("Dictation failed", utterance.Error ?? "Unknown error.");
             return;
         }
@@ -443,7 +428,6 @@ internal sealed class DictateApp : ApplicationContext
         }
         catch (Exception ex)
         {
-            _feedback.Error();
             Notify("Text could not be delivered", $"{detail} Clipboard also failed: {ex.Message}");
         }
     }
@@ -508,7 +492,6 @@ internal sealed class DictateApp : ApplicationContext
         {
             _hotkey.Dispose();
             _recorder.Dispose();
-            _feedback.Dispose();
             _tray.Dispose();
             _icons.Dispose();
             _overlay.Dispose();

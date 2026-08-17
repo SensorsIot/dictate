@@ -43,9 +43,9 @@ This is that run, and it is the acceptance gate for workflow test W-01.
 |---|---|---|
 | 1 | User launches `dictate.exe` | Tray icon appears, state *idle* |
 | 2 | User places the caret in an editor | — |
-| 3 | User presses and holds Right Ctrl | Start beep; overlay shows *recording* within 150 ms |
+| 3 | User presses and holds the hotkey | Overlay shows *recording* within 150 ms |
 | 4 | User speaks one German sentence containing a vocabulary term | Overlay stays *recording* |
-| 5 | User releases Right Ctrl | Stop beep; overlay shows *transcribing* |
+| 5 | User releases the hotkey | Overlay shows *transcribing* |
 | 6 | Pipeline runs | Overlay clears within 2.5 s |
 | 7 | — | The sentence appears at the caret: punctuated, no fillers, in German, vocabulary term spelled per the configured list |
 | 8 | User checks the disk | No audio file, no transcript file, anywhere |
@@ -70,14 +70,13 @@ language, project split, build strategy, audio stack — are in
 | Nothing persisted to disk | Transcript history · an audio ring buffer | The user's call, against a recommendation to keep transcripts for tuning. FR-17.2's in-memory buffer is the compromise that keeps "nothing is lost" honest. |
 | Keys in Windows Credential Manager | Infisical CLI · a plaintext `.env` · a proxy service | DPAPI-encrypted at rest, works off the home LAN, no dependency on another machine being up. |
 | Pin the target window, fall back to the clipboard | Best-effort typing into whatever has focus | Typing into whatever happens to be in front is how dictation lands a sentence in the wrong chat, or at a shell prompt. |
-| Right Ctrl | Right Alt · CapsLock · a mouse button | Right Alt is AltGr on a Swiss layout; binding it would cost `@ { } [ ] \`. |
+| Right Windows | Right Ctrl · Right Alt · CapsLock · a mouse button | The hotkey is held for seconds, so it must mean nothing on its own. Right Ctrl is browser zoom; Right Alt is AltGr on a Swiss layout and binding it would cost `@ { } [ ] \`. |
 
 Six further choices were made only after running it on real hardware, and each
 overturned something that had seemed reasonable on paper. They are recorded at
-the requirement they changed: FR-14.3 (synthesised tones, not Windows chimes),
-FR-14.2 (a fixed corner, not the cursor), FR-14.5 (no notification on success),
-FR-6.7 (always copy to the clipboard), and in the Harness for the audio-device
-lifetime and the diagnostic log.
+the requirement they changed: FR-14.3 (no audio cues at all), FR-14.2 (a fixed
+corner, not the cursor), FR-14.5 (no notification on success), FR-6.7 (always
+copy to the clipboard), and in the Harness for the diagnostic log.
 
 ### 1.5 Scope boundary
 
@@ -114,8 +113,8 @@ risk is recorded as R-06.
 ### 2.2 Data flow
 
 ```
-Right Ctrl down ──► pin target window ──► start capture (16 kHz mono PCM)
-Right Ctrl up   ──► stop capture ──► WAV ──► Scribe ──► raw transcript
+hotkey down ──► pin target window ──► start capture (16 kHz mono PCM)
+hotkey up   ──► stop capture ──► WAV ──► Scribe ──► raw transcript
                                                   └──► Haiku + target context ──► clean text
                                                                     └──► sanitise for target
                                                                               └──► focus unchanged? ──► SendInput
@@ -201,15 +200,15 @@ The transition table is normative; any diagram is generated from it. Every
 
 | From | Event | Guard | To | Action |
 |---|---|---|---|---|
-| `Idle` | hotkey down | input device present | `Recording` | Pin target window; start capture; start beep; show overlay |
-| `Idle` | hotkey down | no input device | `Idle` | Error toast; error beep |
-| `Recording` | hotkey up | held ≥ `MinimumHoldMs` | `Transcribing` | Stop capture; stop beep; overlay → *transcribing* |
+| `Idle` | hotkey down | input device present | `Recording` | Pin target window; start capture; show overlay |
+| `Idle` | hotkey down | no input device | `Idle` | Error toast |
+| `Recording` | hotkey up | held ≥ `MinimumHoldMs` | `Transcribing` | Stop capture; overlay → *transcribing* |
 | `Recording` | hotkey up | held < `MinimumHoldMs` | `Idle` | Discard audio; clear overlay; no sound |
-| `Recording` | max duration reached | — | `Transcribing` | Stop capture; error beep; proceed with what was captured |
+| `Recording` | max duration reached | — | `Transcribing` | Stop capture; toast; proceed with what was captured |
 | `Recording` | hotkey down | — | `Recording` | Ignored (auto-repeat) |
 | `Recording` | hotkey observed physically up, no key-up received | — | as for *hotkey up* | Reconciled release (FR-8.7) |
 | `Transcribing` | pipeline returns text | — | `Delivering` | — |
-| `Transcribing` | pipeline returns failure | — | `Idle` | Error toast; error beep; clear overlay |
+| `Transcribing` | pipeline returns failure | — | `Idle` | Error toast; clear overlay |
 | `Transcribing` | hotkey down | — | `Transcribing` | Ignored — a new utterance may not start while one is in flight |
 | `Delivering` | focus unchanged | — | `Idle` | Type text; clear overlay |
 | `Delivering` | focus changed | — | `Idle` | Copy to clipboard; toast; clear overlay |
@@ -227,7 +226,7 @@ be ignored.
 (default 300 ms) shall be discarded without transcription and without sound.
 
 > **VC** — *Pre:* `Idle`. *Stimulus:* tap the hotkey for < 300 ms. *Expect:* no
-> network request; no beep; state returns to `Idle`. *Must not:* an empty
+> network request; no overlay change that outlives the tap; state returns to `Idle`. *Must not:* an empty
 > utterance reaching Scribe (it is billable). *Tier:* desktop.
 
 **FR-5.3** [Must] `[user]` Capture shall stop automatically after
@@ -235,7 +234,7 @@ be ignored.
 processed.
 
 > **VC** — *Pre:* `Recording`. *Stimulus:* hold past the limit. *Expect:* capture
-> stops within 1 s of the limit; error beep; pipeline runs on what was captured.
+> stops within 1 s of the limit; a toast says so; pipeline runs on what was captured.
 > *Must not:* unbounded memory growth; the utterance silently discarded.
 > *Tier:* desktop.
 
@@ -563,8 +562,15 @@ needs to act or something went wrong.
 > balloon after every successful dictation is noise, and noise trains people to
 > ignore the balloons that matter. Routine timings belong in the diagnostic log.
 
-**FR-14.3** [Should] `[user]` Distinct sounds shall mark start, stop and error,
-and shall be suppressible by configuration.
+**FR-14.3** [Won't] `[user]` dictate makes no sound.
+
+> The overlay and the tray icon carry the state, and audio cues cost more than
+> they were worth. Tones mean a second audio device, and an idle audio endpoint
+> takes seconds to spin back up: opening the output stream stalled capture while
+> it did, so the first dictation after a pause waited seconds for its own
+> microphone. Holding the device open instead makes dictate sit on the output
+> endpoint permanently, which interferes with everything else that uses it.
+> dictate now opens exactly one audio device, the microphone.
 
 **FR-14.4** [Must] `[derived]` The overlay shall never take keyboard focus.
 
@@ -646,40 +652,36 @@ connection.
 
 **NFR-19.2** [Must] `[derived]` Neither network call shall block the UI thread.
 
-**NFR-19.6** [Must] `[derived]` Feedback output and capture shall not share an
-audio API.
+**NFR-19.6** [Must] `[derived]` The application shall hold no audio device other
+than the microphone.
 
-> Capture is winmm (FR-9.1); the tones are WASAPI. Opening a winmm output device
-> stalls a live winmm capture stream for the duration of the open, and the stall
-> is paid in lost audio at the start of the utterance — enough of it that a
-> German sentence came back transcribed as Serbian. Separating the APIs removes
-> the contention rather than scheduling around it, and it also makes a re-open
-> cheap: the expensive part is per-process rather than per-open.
+> An idle audio endpoint takes seconds to spin back up, and opening any stream
+> on it stalls a live capture stream while that happens — so a second device
+> costs the start of the utterance, not merely the latency of whatever the second
+> device was for. Both audio APIs pay it, so this is a property of the endpoint
+> rather than of an API, and it cannot be scheduled around. Holding the second
+> device open avoids the stall by sitting on the endpoint permanently, which
+> interferes with every other application using it. The way out is not to have a
+> second device (FR-14.3).
 >
-> WASAPI is right here for the same reason it is wrong for capture. Shared mode
-> lets the device name the format, which would put a resampler in the capture
-> hot path — but the tones are synthesised, so they are simply generated in
-> whatever format the device asks for, once, when it opens.
->
-> **VC** — *Pre:* output device closed (idle past `FeedbackIdleSeconds`).
-> *Stimulus:* press and hold. *Expect:* `mic.firstBuffer` under 250 ms
-> regardless of what `feedback.open` on the same press cost. *Tier:* desktop.
+> **VC** — *Pre:* dictate idle for several minutes. *Stimulus:* press and hold.
+> *Expect:* `mic.firstBuffer` under 250 ms. *Must not:* the first dictation after
+> a pause being slower than one following a previous dictation. *Tier:* desktop.
 
 **NFR-19.5** [Must] `[derived]` No audio-device open shall happen on the UI
 thread.
 
-> Opening an audio device is unbounded — seconds, on a machine with many
-> endpoints — and the UI thread is where the session state machine runs. Hotkey
-> events reach it through `BeginInvoke`, so a block there stops the *release*
-> being processed: the user holds the key, lets go, and nothing happens until an
-> unrelated sound device has finished opening. The feedback device is therefore
-> warmed at startup, off the UI thread, and tones are queued from a worker.
+> Opening an audio device is unbounded — seconds, on an endpoint that has gone
+> idle — and the UI thread is where the session state machine runs. Hotkey events
+> reach it through `BeginInvoke`, so a block there stops the *release* being
+> processed: the user holds the key, lets go, and nothing happens until a device
+> has finished opening. This covers the pre-warm as well as the session path;
+> both open the microphone, and neither may do it on the UI thread.
 >
 > **VC** — *Pre:* dictate idle for over a minute. *Stimulus:* press and hold.
 > *Expect:* `recording.start` is written within 250 ms of the press — compare its
 > timestamp against `held` on the matching `recording.stop`. *Tier:* desktop.
-> *Evidence:* `feedback.open` records what the open cost, `mic.firstBuffer` what
-> capture cost.
+> *Evidence:* `mic.firstBuffer` records what capture cost.
 
 **NFR-19.3** [Should] `[derived]` Idle memory shall stay under 100 MB.
 
@@ -750,12 +752,10 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `AppendSpaceAfterInsert` | bool | `true` | FR-6.4 |
 | `SilenceThreshold` | int | `200` | FR-9.3 |
 | `KeepMicrophoneOpen` | bool | `false` | FR-9.2 |
-| `FeedbackIdleSeconds` | int | `300` | NFR-19.5 |
 | `EnableDiagnosticLog` | bool | `false` | — |
 | `OverlayPosition` | enum | `BottomRight` | FR-14.2 |
 | `InjectionChunkSize` | int | `200` | FR-12.3 |
 | `InjectionChunkDelayMs` | int | `0` | FR-12.3 |
-| `PlaySounds` | bool | `true` | FR-14.3 |
 | `ShowOverlay` | bool | `true` | FR-14.2 |
 
 ## Appendix B — Glossary

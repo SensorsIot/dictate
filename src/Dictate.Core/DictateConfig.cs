@@ -145,18 +145,17 @@ public sealed class DictateConfig
     /// <summary>Milliseconds between injection batches.</summary>
     public int InjectionChunkDelayMs { get; set; }
 
-    public bool PlaySounds { get; set; } = true;
-
     /// <summary>
-    /// How long the feedback output device stays open after the last tone.
+    /// The recording indicator. It is the only cue dictate gives, so turning it
+    /// off leaves nothing to tell you a session is running.
     ///
-    /// Short on purpose. A device held open keeps dictate sitting on the output
-    /// endpoint, stopping it idling and interfering with whatever else uses it,
-    /// and there is nothing to buy by holding it longer: the expensive part of
-    /// opening an output device is per-process, paid once at startup, and a
-    /// re-open afterwards costs milliseconds.
+    /// There are deliberately no audio cues. dictate opens exactly one audio
+    /// device — the microphone — and a second one for tones cost more than the
+    /// tones were worth: an idle endpoint takes seconds to spin back up, and
+    /// opening the output stream stalls capture while it does, so the first
+    /// dictation after a pause waited seconds for its own microphone. The
+    /// overlay says the same thing, instantly, and touches nothing.
     /// </summary>
-    public int FeedbackIdleSeconds { get; set; } = 30;
     public bool ShowOverlay { get; set; } = true;
 
     /// <summary>

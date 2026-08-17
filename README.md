@@ -81,7 +81,7 @@ C# / .NET 9, shipped as one self-contained `win-x64` executable.
 |---|---|
 | `Dictate.Core` | Platform-free: the pipeline, prompt, sanitisation, degradation rules. Unit-tested on Linux in CI. |
 | `Dictate.Windows` | Every Win32 call: `WH_KEYBOARD_LL` hook, winmm capture, `SendInput`, Credential Manager, tray and overlay. |
-| [NAudio](https://github.com/naudio/NAudio) | Capture and the feedback tones |
+| [NAudio](https://github.com/naudio/NAudio) | Microphone capture |
 | [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-csharp) | The cleanup call |
 
 The split is deliberate: it keeps the whole testable half runnable on a Linux CI

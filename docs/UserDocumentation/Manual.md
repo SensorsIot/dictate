@@ -1,7 +1,7 @@
 # dictate — User Manual
 
-> **Applies to v0.1.9 and later.** Everything below describes behaviour that has
-> been run on a real machine, not intended behaviour.
+> Everything below describes behaviour that has been run on a real machine, not
+> intended behaviour.
 
 The OPERATE plane. One manual with chapters — add a chapter, never a sibling
 document.
@@ -41,14 +41,14 @@ elevated process send keystrokes to unelevated windows.
 
 ## 3. Everyday use
 
-Hold **Right Ctrl**, speak, release.
+Hold **Right Windows**, speak, release.
 
-| What you see or hear | What is happening |
+| What you see | What is happening |
 |---|---|
-| Rising beep, overlay says *recording* | Listening |
-| Falling beep, overlay says *transcribing* | Uploading and cleaning up |
+| Overlay says *recording* | Listening |
+| Overlay says *transcribing* | Uploading and cleaning up |
 | Overlay clears, text appears | Done |
-| Error buzz, notification | Something failed — the notification says what |
+| Notification | Something failed — the notification says what |
 
 Two rules worth knowing:
 
@@ -60,8 +60,8 @@ Two rules worth knowing:
   because a newline typed into a shell is the Enter key and would run the
   command.
 
-Right Ctrl still works as a modifier for shortcuts; dictate watches it without
-swallowing it.
+The hotkey is swallowed, so the right Windows key no longer opens the Start menu
+or acts as a modifier. The left Windows key is untouched.
 
 ## 4. Configuration
 
@@ -80,8 +80,7 @@ The settings you are most likely to want:
 | `MinimumHoldMs` | `300` | Presses shorter than this are ignored as accidental taps |
 | `MaximumRecordingSeconds` | `120` | Hard stop, so a stuck key cannot upload your afternoon |
 | `AlwaysCopyToClipboard` | `true` | Also put each utterance on the clipboard, so a misdirected one is one Ctrl+V away |
-| `PlaySounds` / `ShowOverlay` | `true` | Turn the feedback off |
-| `FeedbackIdleSeconds` | `30` | How long the sound device stays open after the last beep. Kept short so dictate is not sitting on your speakers between dictations |
+| `ShowOverlay` | `true` | The recording indicator. dictate makes no sound, so this is the only cue — turning it off leaves nothing to tell you a session is running |
 | `OverlayPosition` | `BottomRight` | Where the recording indicator sits: `BottomRight`, `BottomLeft`, `TopRight`, `TopLeft`, or `NearCursor` to have it follow the mouse |
 | `EnableDiagnosticLog` | `false` | Write `%LOCALAPPDATA%\dictate\dictate.log` — timings and outcomes, never your text |
 | `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently |
@@ -136,20 +135,18 @@ quit dictate; that is the no-persistence promise, not a bug.
 
 ### Other audio misbehaves while dictate is running
 
-Fixed in v0.1.6. Earlier versions held an output stream open for the whole time
-dictate was running, which stopped the audio device idling and interfered with
-whatever else was playing. If you see this on 0.1.6 or later, it is a new bug —
-please report it.
+dictate opens exactly one audio device, the microphone, and makes no sound of
+its own — so it should not affect anything you are playing. If it does, that is
+a bug worth reporting.
 
-Windows also has its own feature that ducks all other audio by 80% when it
+Windows does have its own feature that ducks all other audio by 80% when it
 detects "communications activity", and opening a microphone counts. That is a
 machine setting, not dictate: **Sound settings → More sound settings →
-Communications → Do nothing**. It was investigated at length here and turned out
-*not* to be the cause of the interference above, but it is worth knowing about.
+Communications → Do nothing**.
 
-### Turning the feedback off
+### Turning the indicator off
 
-`"PlaySounds": false` stops the tones; `"ShowOverlay": false` hides the
+`"ShowOverlay": false` hides the
 indicator. The tray icon still changes colour, so you keep a state cue either
 way.
 
@@ -178,7 +175,7 @@ Turn the diagnostic log on first — it answers most of these directly.
 | Nothing typed, no error | The focused window is running as administrator. Windows will not let an unelevated process send it input, and running dictate elevated breaks every *other* application instead. |
 | Text lands in the wrong application | The wrong window had focus when you pressed the key. Press Ctrl+V — every utterance is on the clipboard too. |
 | Text goes to the clipboard every time | You are switching windows before the text is ready. That is the safety net working, not a fault. |
-| The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` — it says how long the microphone took to deliver anything. If a `feedback.open` of similar duration sits beside it, the sound device was opening and stalled capture; raise `FeedbackIdleSeconds` so it stays open across your pauses. If `mic.firstBuffer` is large with no `feedback.open` nearby, the interface itself is slow to spin up — set `"KeepMicrophoneOpen": true`. |
+| The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` — it says how long the microphone took to deliver anything. A large value means the interface was slow to spin its capture stream up; set `"KeepMicrophoneOpen": true`, at the cost of the microphone indicator staying lit. |
 | A held key produces several short utterances instead of one | Every `recording.stop` will read `reason=Reconciled`. dictate is deciding the key was released while you are still holding it — check that `SuppressHotkey` matches your hotkey, and report it with the log. |
 | The keyboard stops responding, or every key acts as a shortcut | A modifier is stuck down at the system level. Tap the hotkey once to clear it. |
 | Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired Anthropic key. |
