@@ -208,6 +208,7 @@ The transition table is normative; any diagram is generated from it. Every
 | `Recording` | hotkey up | held < `MinimumHoldMs` | `Idle` | Discard audio; clear overlay; no sound |
 | `Recording` | max duration reached | — | `Transcribing` | Stop capture; error beep; proceed with what was captured |
 | `Recording` | hotkey down | — | `Recording` | Ignored (auto-repeat) |
+| `Recording` | hotkey observed physically up, no key-up received | — | as for *hotkey up* | Reconciled release (FR-8.7) |
 | `Transcribing` | pipeline returns text | — | `Delivering` | — |
 | `Transcribing` | pipeline returns failure | — | `Idle` | Error toast; error beep; clear overlay |
 | `Transcribing` | hotkey down | — | `Transcribing` | Ignored — a new utterance may not start while one is in flight |
@@ -344,6 +345,55 @@ application by default, and suppressed only if the user opts in.
 > A low-level hook installed by an elevated process cannot see input destined for
 > unelevated windows. Running as administrator would stop dictation working in
 > ordinary applications.
+
+**FR-8.6** [Must] `[derived]` Every hotkey press shall be recorded with whether it
+was synthesised by another process, and presses so synthesised shall be
+ignorable by configuration (`IgnoreInjectedHotkey`, default off).
+
+> dictate can rule out its own synthetic keystrokes by signature (FR-8.3) but not
+> anyone else's. Mouse software, CAD input devices and macro tools all map buttons
+> to bare modifiers, and for a push-to-talk an unasked-for press means an open
+> microphone. Rejecting synthetic input cannot be the default, because
+> remote-desktop tools deliver the user's genuine keystrokes the same way —
+> so the origin is always recorded and the choice is left to the user.
+>
+> **VC** — *Pre:* `Idle`, `IgnoreInjectedHotkey` off. *Stimulus:* another process
+> sends the hotkey via SendInput. *Expect:* the session starts and
+> `recording.start` records `injected=True`. *Then:* with the setting on, no
+> session starts and `hotkey.rejected` is logged. *Tier:* desktop.
+
+**FR-8.7** [Must] `[derived]` A press whose release is never delivered shall be
+released within the system's initial auto-repeat delay plus 250 ms, and a press
+that is still held shall never be treated as released.
+
+> A low-level hook does not receive input destined for a higher-integrity window.
+> Hold the hotkey, let an elevated window take focus, release it there, and no
+> key-up ever arrives — capture would otherwise run until the process exits.
+> FR-5.3 bounds the damage; this removes it.
+>
+> The second half of the requirement is not padding. The system key state cannot
+> carry this alone: a suppressed hotkey (FR-8.4) never reaches the system, so it
+> reads as up for the whole time it is held. Auto-repeat is what survives
+> suppression — the hook keeps receiving down-events either way — so a release
+> requires both the key state and silence from the keyboard.
+>
+> The bound is read from the machine (`SPI_GETKEYBOARDDELAY`,
+> `SPI_GETKEYBOARDSPEED`) rather than fixed at the slowest Windows permits, and
+> two graces are kept: the full initial delay until the first repeat arrives, and
+> four repeat periods after it. On a typical machine — 500 ms delay, 30 repeats
+> per second — that is 650 ms falling to 282 ms, against 1150 ms if the worst
+> case were assumed throughout. Both are logged at startup as `graceInitial` and
+> `graceRepeat`.
+>
+> **VC** — *Pre:* `Recording`. *Stimulus:* suppress the key-up (release while an
+> elevated window has focus). *Expect:* the session ends within the initial delay
+> plus 250 ms and `recording.stop` records `reason=Reconciled`. *Must not:* the
+> capture device left open. *Tier:* desktop.
+>
+> **VC** — *Pre:* `Idle`, `SuppressHotkey` on. *Stimulus:* hold the hotkey for 3 s
+> and speak. *Expect:* exactly one session, `held≈3000ms`, `reason=Released`.
+> *Must not:* the hold fragmenting into repeated sessions discarded as taps.
+> *Tier:* desktop.
 
 ## 9. Audio capture
 
@@ -560,6 +610,22 @@ connection.
 
 **NFR-19.2** [Must] `[derived]` Neither network call shall block the UI thread.
 
+**NFR-19.5** [Must] `[derived]` No audio-device open shall happen on the UI
+thread.
+
+> Opening a device is unbounded — 3.2 s was measured on the user's machine for
+> the output device — and the UI thread is where the session state machine runs.
+> Hotkey events reach it through `BeginInvoke`, so a block there stops the
+> *release* being processed: the user holds the key, lets go, and nothing
+> happens until an unrelated sound device has finished opening. The feedback
+> tones are the case that mattered, because FR-14.x closes that device after 30 s
+> of quiet and so re-pays the cost all day.
+>
+> **VC** — *Pre:* dictate idle for over a minute. *Stimulus:* press and hold.
+> *Expect:* `recording.start` is written within 250 ms of the press — compare its
+> timestamp against `held` on the matching `recording.stop`. *Tier:* desktop.
+> *Evidence:* `feedback.open` records what the open actually cost.
+
 **NFR-19.3** [Should] `[derived]` Idle memory shall stay under 100 MB.
 
 **NFR-19.4** [Must] `[derived]` Memory shall not grow across sessions beyond the
@@ -608,6 +674,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 |---|---|---|---|
 | `HotkeyVirtualKey` | int | `0xA3` (Right Ctrl) | FR-8.1 |
 | `SuppressHotkey` | bool | `false` | FR-8.4 |
+| `IgnoreInjectedHotkey` | bool | `false` | FR-8.6 |
 | `MinimumHoldMs` | int | `300` | FR-5.2 |
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
 | `Language` | enum | `Auto` | FR-10.3 |

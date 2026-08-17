@@ -393,6 +393,63 @@ tests:
     verifies: [FR-20.4]
     status: designed
 
+  - id: DT-18
+    name: A press whose key-up never arrives is released within a second
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-8.7]
+    # Oracle: the Windows consent store, which is what drives the taskbar
+    # microphone indicator. LastUsedTimeStop == 0 means the device is still open.
+    #   HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager
+    #     \ConsentStore\microphone\NonPackaged\C:#...#dictate.exe
+    oracle: consent-store LastUsedTimeStop becomes non-zero after release
+    status: designed
+
+  - id: DT-22
+    name: A press after a long idle is not delayed by the output device opening
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [NFR-19.5]
+    # Caught on 0.1.12: recording.start carried timestamp 22:10:14.823 while its
+    # own measurements put the key-press at 22:10:11.498 — a 3.2 s UI-thread
+    # block inside the first WaveOut open, which also cost most of the audio.
+    oracle: recording.start timestamp minus (stop timestamp - held) < 250ms
+    status: designed
+
+  - id: DT-21
+    name: A suppressed hotkey held for three seconds is one session, not eleven
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-8.7, FR-5.2]
+    # Regression: with SuppressHotkey on, the system key state reads "up" for the
+    # whole hold, so reconciling on it alone fragments the hold into ~250 ms
+    # sessions that are each discarded as a tap. Observed on 0.1.10.
+    oracle: exactly one recording.start; recording.stop reason=Released held≈3000ms
+    status: designed
+
+  - id: DT-19
+    name: A hotkey synthesised by another process is recorded as injected
+    kind: atomic
+    scenario: negative
+    tier: desktop
+    verifies: [FR-8.6]
+    oracle: recording.start logs injected=True; with IgnoreInjectedHotkey on, hotkey.rejected instead
+    status: designed
+
+  - id: DT-20
+    name: The capture device is released after every press across a hundred cycles
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-8.7, FR-9.4]
+    # The leak this catches is intermittent — a race between StopRecording and
+    # Dispose — so one cycle proves nothing. Watch mic.close confirmed=False.
+    oracle: consent-store LastUsedTimeStop non-zero after each cycle; no mic.close confirmed=False
+    status: designed
+
   # ---- workflow: the acceptance gate -----------------------------------------
 
   - id: W-01

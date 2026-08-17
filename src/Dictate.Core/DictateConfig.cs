@@ -26,6 +26,21 @@ public sealed class DictateConfig
     /// </summary>
     public bool SuppressHotkey { get; set; }
 
+    /// <summary>
+    /// Ignore hotkey presses that were synthesised by another process rather than
+    /// typed on a keyboard.
+    ///
+    /// Off by default, and the default is a real trade rather than an oversight.
+    /// Any application that maps a button to a modifier — mouse software, CAD
+    /// input devices, macro tools — can start a dictation you did not ask for,
+    /// which for a push-to-talk means an open microphone. But remote-desktop
+    /// tools deliver your genuine keystrokes as synthetic input too, so turning
+    /// this on breaks dictation over AnyDesk, TeamViewer and RDP. Every press is
+    /// logged with its origin either way, so the log identifies the source before
+    /// you have to choose.
+    /// </summary>
+    public bool IgnoreInjectedHotkey { get; set; }
+
     /// <summary>Presses shorter than this are treated as an accidental tap and ignored.</summary>
     public int MinimumHoldMs { get; set; } = 300;
 
@@ -117,6 +132,22 @@ public sealed class DictateConfig
     public int InjectionChunkDelayMs { get; set; }
 
     public bool PlaySounds { get; set; } = true;
+
+    /// <summary>
+    /// How long the feedback output device stays open after the last tone.
+    ///
+    /// This is not about the beep. Opening the output device stalls the capture
+    /// stream — both go through winmm — so a dictation that starts while the
+    /// device is closed loses its first seconds of audio, measured at 3.2 s on
+    /// one machine and enough to have an utterance transcribed as the wrong
+    /// language. The device must therefore already be open when a session
+    /// starts, which means staying open across the pauses in normal use.
+    ///
+    /// The counter-pressure is O-08: held open around the clock, dictate sits on
+    /// the output endpoint and stops it idling. Five minutes keeps it warm for a
+    /// working session and lets it go when the user has actually stopped.
+    /// </summary>
+    public int FeedbackIdleSeconds { get; set; } = 300;
     public bool ShowOverlay { get; set; } = true;
 
     /// <summary>

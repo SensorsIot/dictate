@@ -46,9 +46,12 @@ internal sealed class DictateApp : ApplicationContext
 
         _icons = new TrayIcons();
         _overlay = new Overlay(config.OverlayPosition);
-        _feedback = new Feedback(config.PlaySounds);
+        _feedback = new Feedback(config.PlaySounds, config.FeedbackIdleSeconds);
+        _feedback.DeviceOpened += took => _log.Event("feedback.open", ("took", took));
         _recorder = new AudioRecorder(config.MaximumRecordingSeconds, config.KeepMicrophoneOpen);
         _recorder.LimitReached += OnRecordingLimitReached;
+        _recorder.DeviceClosed += confirmed => _log.Event("mic.close", ("confirmed", confirmed));
+        _recorder.FirstBuffer += after => _log.Event("mic.firstBuffer", ("after", after));
 
         _recentMenu = new ToolStripMenuItem("Recent") { Enabled = false };
 
@@ -72,13 +75,20 @@ internal sealed class DictateApp : ApplicationContext
 
         // Installed last: once the hook is live the callbacks can arrive, and
         // they assume everything above exists.
-        _hotkey = new HotkeyListener(config.HotkeyVirtualKey, config.SuppressHotkey);
+        _hotkey = new HotkeyListener(config.HotkeyVirtualKey, config.SuppressHotkey, config.IgnoreInjectedHotkey);
         _hotkey.Pressed += OnHotkeyPressed;
         _hotkey.Released += OnHotkeyReleased;
+        _hotkey.InjectedRejected += origin => _log.Event("hotkey.rejected",
+            ("reason", "injected"), ("lowerIL", origin.LowerIntegrity));
+
+        var (initialGrace, repeatGrace) = _hotkey.Grace;
 
         _log.Event("started",
             ("hotkey", $"0x{config.HotkeyVirtualKey:X2}"),
             ("keepMicOpen", config.KeepMicrophoneOpen),
+            ("ignoreInjected", config.IgnoreInjectedHotkey),
+            ("graceInitial", $"{initialGrace}ms"),
+            ("graceRepeat", $"{repeatGrace}ms"),
             ("cleanup", config.CleanupModel));
     }
 
@@ -92,6 +102,11 @@ internal sealed class DictateApp : ApplicationContext
     {
         _ = _overlay.Handle;          // create the window now, not mid-utterance
         _recorder.PreWarm();
+
+        // The output device was the one first-use cost this method did not cover,
+        // and it was the largest of them: measured at 3.2 s on the user's machine,
+        // paid on the first press, on the UI thread.
+        _feedback.PreWarm();
 
         try
         {
@@ -126,20 +141,34 @@ internal sealed class DictateApp : ApplicationContext
 
     // --- hotkey: these two run INSIDE the hook. Keep them trivial. -----------
 
-    private void OnHotkeyPressed()
+    private void OnHotkeyPressed(PressOrigin origin)
     {
         var pressedAt = Stopwatch.GetTimestamp();
-        _overlay.BeginInvoke(() => BeginSession(pressedAt));
+        _overlay.BeginInvoke(() => BeginSession(pressedAt, origin));
     }
 
-    private void OnHotkeyReleased()
+    private void OnHotkeyReleased(ReleaseReason reason)
     {
-        _overlay.BeginInvoke(EndSession);
+        var stop = reason == ReleaseReason.KeyUp ? StopReason.Released : StopReason.Reconciled;
+        _overlay.BeginInvoke(() => EndSession(stop));
     }
 
     // --- session, on the message loop ---------------------------------------
 
-    private void BeginSession(long pressedAt)
+    /// <summary>Why capture ended. Recorded on every <c>recording.stop</c>.</summary>
+    private enum StopReason
+    {
+        /// <summary>The hotkey came up — the normal path.</summary>
+        Released,
+
+        /// <summary>No key-up arrived; the key was observed to be physically up.</summary>
+        Reconciled,
+
+        /// <summary><see cref="DictateConfig.MaximumRecordingSeconds"/> was hit.</summary>
+        Limit,
+    }
+
+    private void BeginSession(long pressedAt, PressOrigin origin)
     {
         // FR-5.1: one session at a time. A press while transcribing is ignored
         // rather than queued — two utterances in flight is how audio from one
@@ -178,10 +207,17 @@ internal sealed class DictateApp : ApplicationContext
         SetState(SessionState.Recording);
         _feedback.Start();
 
-        _log.Event("recording.start", ("pressToCapture", _startLatency));
+        // The origin is recorded because a press dictate did not expect is
+        // otherwise indistinguishable from the user's thumb. Any process can
+        // synthesise the hotkey, and the only one this application can rule out
+        // by signature is itself.
+        _log.Event("recording.start",
+            ("pressToCapture", _startLatency),
+            ("injected", origin.Injected),
+            ("lowerIL", origin.LowerIntegrity));
     }
 
-    private async void EndSession()
+    private async void EndSession(StopReason reason)
     {
         if (_state != SessionState.Recording)
         {
@@ -191,11 +227,27 @@ internal sealed class DictateApp : ApplicationContext
         var held = Stopwatch.GetElapsedTime(_pressedAtTicks);
         var pcm = _recorder.Stop();
 
-        // FR-5.2: an accidental tap costs nothing and says nothing.
+        _log.Event("recording.stop",
+            ("reason", reason),
+            ("held", held),
+            ("audioMB", Math.Round(pcm.Length / 1024.0 / 1024.0, 2)));
+
+        // FR-5.2: an accidental tap costs nothing and says nothing — to the user.
+        // It is still logged, because a session that ends here is otherwise
+        // completely invisible, and a log where sessions vanish without trace
+        // reads as a stuck recording when it is nothing of the sort.
         if (held.TotalMilliseconds < _config.MinimumHoldMs)
         {
             SetState(SessionState.Idle);
+            _log.Event("recording.discarded", ("reason", "tap"), ("held", held));
             return;
+        }
+
+        if (reason == StopReason.Limit)
+        {
+            _feedback.Error();
+            Notify("Recording limit reached",
+                $"Stopped after {_config.MaximumRecordingSeconds}s. Transcribing what was captured.");
         }
 
         SetState(SessionState.Transcribing);
@@ -281,17 +333,24 @@ internal sealed class DictateApp : ApplicationContext
             ("threads", threads));
     }
 
+    /// <summary>
+    /// FR-5.3: the limit ends the session, it does not merely announce it.
+    ///
+    /// This used to show a balloon and nothing else — so capture never stopped,
+    /// the device stayed open, the state machine stayed in <c>Recording</c>, and
+    /// the notification claiming "Stopped … Transcribing what was captured" was
+    /// false on both counts. With a hotkey release that never arrives, that left
+    /// the microphone open for the life of the process.
+    /// </summary>
     private void OnRecordingLimitReached()
     {
-        // Raised on the recorder's callback thread.
+        // Raised on the recorder's callback thread, while the recorder holds its
+        // own lock. Everything real is posted to the UI thread: the state machine
+        // lives there, and calling back into the recorder from here would re-enter
+        // it mid-callback.
         if (_overlay.IsHandleCreated)
         {
-            _overlay.BeginInvoke(() =>
-            {
-                _feedback.Error();
-                Notify("Recording limit reached",
-                    $"Stopped after {_config.MaximumRecordingSeconds}s. Transcribing what was captured.");
-            });
+            _overlay.BeginInvoke(() => EndSession(StopReason.Limit));
         }
     }
 

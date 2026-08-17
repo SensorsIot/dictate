@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Dictate.Core;
 using NAudio.Wave;
 
@@ -24,6 +25,14 @@ namespace Dictate.Windows;
 /// </summary>
 internal sealed class AudioRecorder : IDisposable
 {
+    /// <summary>
+    /// How long a teardown waits for the device to confirm it has stopped before
+    /// disposing anyway. Generous — the cost of overshooting is a background
+    /// thread parked briefly, the cost of undershooting is the bug this exists
+    /// to prevent.
+    /// </summary>
+    private const int TearDownTimeoutMs = 500;
+
     private readonly int _maxBytes;
     private readonly bool _keepOpen;
     private readonly object _gate = new();
@@ -32,9 +41,31 @@ internal sealed class AudioRecorder : IDisposable
     private MemoryStream? _buffer;
     private bool _capped;
     private bool _disposed;
+    private bool _firstBufferSeen;
+    private long _startedTicks;
 
     /// <summary>Raised when <see cref="DictateConfig.MaximumRecordingSeconds"/> is hit.</summary>
     public event Action? LimitReached;
+
+    /// <summary>
+    /// Raised after a capture device has been torn down. The flag is false when
+    /// the device never confirmed it had stopped, which is the signature of a
+    /// handle that did not release — i.e. a microphone Windows still considers
+    /// in use. Diagnostics only; nothing branches on it.
+    /// </summary>
+    public event Action<bool>? DeviceClosed;
+
+    /// <summary>
+    /// Raised with how long after <see cref="Start"/> the first audio buffer
+    /// actually arrived.
+    ///
+    /// This separates two failures that look identical from the outside and have
+    /// opposite fixes: a capture stream that was stalled by something else in the
+    /// process, and an interface that needs a moment to spin up and returns
+    /// nothing until it has. Without it, both read as "the microphone produced
+    /// only silence".
+    /// </summary>
+    public event Action<TimeSpan>? FirstBuffer;
 
     internal AudioRecorder(int maximumSeconds, bool keepMicrophoneOpen)
     {
@@ -118,9 +149,11 @@ internal sealed class AudioRecorder : IDisposable
 
             _buffer = new MemoryStream();
             _capped = false;
+            _firstBufferSeen = false;
 
             EnsureDeviceOpen();
             IsRecording = true;
+            _startedTicks = Stopwatch.GetTimestamp();
         }
     }
 
@@ -133,6 +166,12 @@ internal sealed class AudioRecorder : IDisposable
             if (!IsRecording || _buffer is null || _capped)
             {
                 return;
+            }
+
+            if (!_firstBufferSeen)
+            {
+                _firstBufferSeen = true;
+                FirstBuffer?.Invoke(Stopwatch.GetElapsedTime(_startedTicks));
             }
 
             var remaining = _maxBytes - (int)_buffer.Length;
@@ -171,37 +210,93 @@ internal sealed class AudioRecorder : IDisposable
         }
     }
 
+    /// <summary>
+    /// Detaches the current device and tears it down on a background thread.
+    ///
+    /// The handoff is the point. <c>StopRecording</c> is asynchronous: it asks the
+    /// callback thread to wind down and returns immediately, so disposing on the
+    /// next line races it, and NAudio discards the result of the underlying
+    /// waveInClose. When that close loses the race the handle is never released —
+    /// silently, permanently, and visibly to the user as a microphone indicator
+    /// that stays lit until the process exits.
+    ///
+    /// Waiting for <c>RecordingStopped</c> is the fix, but it cannot be waited on
+    /// here: this runs under <c>_gate</c> on the UI thread, and NAudio raises that
+    /// event through the captured SynchronizationContext — which is this thread.
+    /// Blocking would wait for a callback that cannot run until we stop blocking.
+    /// So the device is detached immediately and drained elsewhere; a new press
+    /// opens a fresh one without waiting, at the cost of a brief overlap.
+    /// </summary>
     private void CloseDevice()
     {
-        if (_device is null)
+        var device = _device;
+        if (device is null)
         {
             return;
         }
 
+        _device = null;
+        device.DataAvailable -= OnDataAvailable;
+
+        _ = Task.Run(() => TearDown(device));
+    }
+
+    private void TearDown(WaveInEvent device)
+    {
+        using var stopped = new ManualResetEventSlim(false);
+        void OnStopped(object? sender, StoppedEventArgs e) => stopped.Set();
+
+        device.RecordingStopped += OnStopped;
+
+        var confirmed = false;
         try
         {
-            _device.StopRecording();
+            device.StopRecording();
+            confirmed = stopped.Wait(TearDownTimeoutMs);
         }
         catch (Exception)
         {
             // A device unplugged mid-utterance throws here; whatever was
             // captured before that is still worth sending.
         }
+        finally
+        {
+            device.RecordingStopped -= OnStopped;
 
-        _device.DataAvailable -= OnDataAvailable;
-        _device.Dispose();
-        _device = null;
+            try
+            {
+                device.Dispose();
+            }
+            catch (Exception)
+            {
+                // Nothing useful left to do — the handle is the driver's problem now.
+            }
+        }
+
+        DeviceClosed?.Invoke(confirmed);
     }
 
     public void Dispose()
     {
+        WaveInEvent? device;
+
         lock (_gate)
         {
             _disposed = true;
             IsRecording = false;
-            CloseDevice();
+
+            device = _device;
+            _device = null;
             _buffer?.Dispose();
             _buffer = null;
+        }
+
+        // Torn down inline rather than handed off: this is process shutdown, and
+        // a background task racing the exit is how the handle leaks anyway.
+        if (device is not null)
+        {
+            device.DataAvailable -= OnDataAvailable;
+            TearDown(device);
         }
     }
 }

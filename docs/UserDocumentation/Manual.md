@@ -74,11 +74,14 @@ The settings you are most likely to want:
 |---|---|---|
 | `Language` | `Auto` | `German` or `English` pins the language when auto-detection keeps guessing wrong on short phrases |
 | `Vocabulary` | project terms | Words to spell exactly this way — project names, call signs, jargon |
-| `HotkeyVirtualKey` | `163` (Right Ctrl) | Virtual-key code to hold. **Do not use Right Alt** — on a Swiss keyboard that is AltGr, and you would lose `@ { } [ ] \` |
+| `HotkeyVirtualKey` | `163` (Right Ctrl) | Virtual-key code to hold — see the table below for the ones worth using |
+| `SuppressHotkey` | `false` | Swallow the hotkey instead of passing it to the focused window. Required for the Windows key, which otherwise opens the Start menu on every dictation |
+| `IgnoreInjectedHotkey` | `false` | Ignore hotkey presses synthesised by other software (mouse-button mappings, macro tools). Leave off if you dictate over AnyDesk, TeamViewer or RDP — those deliver your real keystrokes the same way |
 | `MinimumHoldMs` | `300` | Presses shorter than this are ignored as accidental taps |
 | `MaximumRecordingSeconds` | `120` | Hard stop, so a stuck key cannot upload your afternoon |
 | `AlwaysCopyToClipboard` | `true` | Also put each utterance on the clipboard, so a misdirected one is one Ctrl+V away |
 | `PlaySounds` / `ShowOverlay` | `true` | Turn the feedback off |
+| `FeedbackIdleSeconds` | `300` | How long the sound device stays open after the last beep. Not just about beeps: opening it stalls the microphone for seconds, so a dictation starting while it is closed loses the start of your sentence. Lower it only if dictate interferes with other audio |
 | `OverlayPosition` | `BottomRight` | Where the recording indicator sits: `BottomRight`, `BottomLeft`, `TopRight`, `TopLeft`, or `NearCursor` to have it follow the mouse |
 | `EnableDiagnosticLog` | `false` | Write `%LOCALAPPDATA%\dictate\dictate.log` — timings and outcomes, never your text |
 | `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently |
@@ -87,6 +90,32 @@ The settings you are most likely to want:
 A malformed `config.json` stops dictate at startup with an error rather than
 silently reverting to defaults — a typo that quietly undid every setting would
 look exactly like the settings never applying.
+
+### Choosing the hotkey
+
+Left and right are separate keys with separate numbers. dictate watches exactly
+the one you name, so `92` never fires on the left Windows key and `162` never
+fires on the right Ctrl.
+
+| Key | Number | Notes |
+|---|---|---|
+| Left Ctrl | `162` | Breaks Ctrl+C and every other left-hand chord if suppressed |
+| **Right Ctrl** | **`163`** | The default. Does nothing on its own in almost every application |
+| Left Windows | `91` | Needs `SuppressHotkey`. Also the key most Windows shortcuts are built on |
+| **Right Windows** | **`92`** | Needs `SuppressHotkey`. The best choice if you never use it — nothing else competes for it |
+| Left Alt | `164` | Opens the menu bar of the focused window on its own |
+| Right Alt | `165` | **Do not use.** On a Swiss keyboard this is AltGr, and you would lose `@ { } [ ] \` |
+| Scroll Lock | `145` | Genuinely unused on modern machines, but absent from many compact keyboards |
+
+**A Windows key requires `"SuppressHotkey": true` in the same edit.** Pressing
+and releasing either Windows key with nothing in between opens the Start menu, so
+without suppression you get the Start menu on every dictation. Suppression stops
+the key reaching the shell — at the price of every Win+*key* shortcut made with
+that hand. On the right Windows key that price is usually zero.
+
+Not every keyboard has a right Windows key; compact and some gaming models
+replace it with `Fn`. If dictation stops responding after the change, that is the
+first thing to check.
 
 ## 5. When it lands in the wrong place
 

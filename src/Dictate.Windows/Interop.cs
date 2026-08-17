@@ -17,6 +17,14 @@ internal static class Interop
     internal const int WM_SYSKEYDOWN = 0x0104;
     internal const int WM_SYSKEYUP = 0x0105;
 
+    /// <summary>
+    /// KBDLLHOOKSTRUCT.flags bits. Set when the event came from SendInput rather
+    /// than a physical key. Note that "injected" does not mean "illegitimate":
+    /// remote-desktop tools deliver the user's real keystrokes this way too.
+    /// </summary>
+    internal const uint LLKHF_INJECTED = 0x10;
+    internal const uint LLKHF_LOWER_IL_INJECTED = 0x02;
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct KBDLLHOOKSTRUCT
     {
@@ -41,6 +49,26 @@ internal static class Interop
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     internal static extern IntPtr GetModuleHandleW(string? lpModuleName);
+
+    /// <summary>
+    /// Physical key state, independent of focus. A low-level hook does not
+    /// receive input destined for a higher-integrity window, so a key released
+    /// while an elevated window has focus never produces a WM_KEYUP here — but
+    /// this still reports the key as up. That is what makes it a usable
+    /// reconciliation source for a stuck hotkey.
+    /// </summary>
+    [DllImport("user32.dll")]
+    internal static extern short GetAsyncKeyState(int vKey);
+
+    /// <summary>Index 0–3: 250 ms, 500 ms, 750 ms, 1000 ms before auto-repeat starts.</summary>
+    internal const uint SPI_GETKEYBOARDDELAY = 0x0016;
+
+    /// <summary>Index 0–31, linear from about 2.5 to about 30 repeats per second.</summary>
+    internal const uint SPI_GETKEYBOARDSPEED = 0x000A;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoW(uint uiAction, uint uiParam, ref int pvParam, uint fWinIni);
 
     // --- Synthetic input ----------------------------------------------------
 

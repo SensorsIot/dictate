@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NAudio.Wave;
 
 namespace Dictate.Windows;
@@ -28,11 +29,11 @@ internal sealed class Feedback : IDisposable
     private readonly byte[] _error;
 
     /// <summary>
-    /// How long the output device stays open after the last tone. Long enough
-    /// that every beep within a dictation is instant, short enough that dictate
-    /// is not holding a stream on the speakers while idle.
+    /// How long the output device stays open after the last tone. See
+    /// <see cref="DictateConfig.FeedbackIdleSeconds"/> — this is load-bearing for
+    /// audio capture, not just for how promptly a beep arrives.
     /// </summary>
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _idleTimeout;
 
     private readonly object _gate = new();
 
@@ -40,9 +41,43 @@ internal sealed class Feedback : IDisposable
     private BufferedWaveProvider? _sink;
     private System.Threading.Timer? _idle;
 
-    internal Feedback(bool enabled)
+    /// <summary>
+    /// Raised with how long an output-device open actually took. Opening the
+    /// device is the one unbounded cost in here and it was invisible until it
+    /// was measured — on one machine it ran to 3.2 s.
+    /// </summary>
+    public event Action<TimeSpan>? DeviceOpened;
+
+    /// <summary>
+    /// Opens the output device now, off the caller's thread, so the first tone
+    /// does not pay for it.
+    ///
+    /// The idle countdown is armed exactly as a real tone would arm it, so this
+    /// does not quietly reintroduce what O-08 fixed: if no dictation follows
+    /// within the timeout the device closes again and dictate goes back to not
+    /// holding a stream on the speakers.
+    /// </summary>
+    internal void PreWarm()
+    {
+        if (!_enabled)
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            lock (_gate)
+            {
+                OpenOutput();
+                ArmIdle();
+            }
+        });
+    }
+
+    internal Feedback(bool enabled, int idleSeconds)
     {
         _enabled = enabled;
+        _idleTimeout = TimeSpan.FromSeconds(Math.Max(5, idleSeconds));
 
         // Rising for "listening", a lower falling note for "done". A major
         // sixth apart, so they are unmistakable even at low volume.
@@ -57,6 +92,8 @@ internal sealed class Feedback : IDisposable
         {
             return;
         }
+
+        var started = Stopwatch.GetTimestamp();
 
         try
         {
@@ -89,6 +126,16 @@ internal sealed class Feedback : IDisposable
             _output = null;
             _sink = null;
         }
+
+        DeviceOpened?.Invoke(Stopwatch.GetElapsedTime(started));
+    }
+
+    private void ArmIdle()
+    {
+        // Restart the idle countdown: the device closes only once dictation
+        // has actually stopped for a while.
+        _idle ??= new System.Threading.Timer(_ => CloseIfIdle(), null, Timeout.Infinite, Timeout.Infinite);
+        _idle.Change(_idleTimeout, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>
@@ -129,6 +176,17 @@ internal sealed class Feedback : IDisposable
         return buffer;
     }
 
+    /// <summary>
+    /// Hands the tone to a worker and returns immediately.
+    ///
+    /// This is called from the session state machine on the UI thread, and
+    /// <see cref="OpenOutput"/> can take seconds when the device has closed
+    /// itself after the idle timeout. Blocking the message loop there freezes
+    /// the whole application: hotkey events reach it through
+    /// <c>BeginInvoke</c>, so the user's key-*release* cannot be processed until
+    /// the beep finishes opening a sound device. A late tone is cosmetic; a
+    /// frozen pump is not.
+    /// </summary>
     private void Play(byte[] tone)
     {
         if (!_enabled)
@@ -136,6 +194,11 @@ internal sealed class Feedback : IDisposable
             return;
         }
 
+        _ = Task.Run(() => PlayCore(tone));
+    }
+
+    private void PlayCore(byte[] tone)
+    {
         lock (_gate)
         {
             OpenOutput();
@@ -159,10 +222,7 @@ internal sealed class Feedback : IDisposable
                 // A device removed while running. Silence is acceptable.
             }
 
-            // Restart the idle countdown: the device closes only once dictation
-            // has actually stopped for a while.
-            _idle ??= new System.Threading.Timer(_ => CloseIfIdle(), null, Timeout.Infinite, Timeout.Infinite);
-            _idle.Change(IdleTimeout, Timeout.InfiniteTimeSpan);
+            ArmIdle();
         }
     }
 
