@@ -412,9 +412,9 @@ tests:
     scenario: deviation
     tier: desktop
     verifies: [NFR-19.5]
-    # Caught on 0.1.12: recording.start carried timestamp 22:10:14.823 while its
-    # own measurements put the key-press at 22:10:11.498 — a 3.2 s UI-thread
-    # block inside the first WaveOut open, which also cost most of the audio.
+    # recording.start's own timestamp against the press time implied by `held` on
+    # the matching stop. They diverge when something blocks the UI thread — an
+    # audio-device open being the case that costs audio as well as latency.
     oracle: recording.start timestamp minus (stop timestamp - held) < 250ms
     status: designed
 
@@ -424,9 +424,9 @@ tests:
     scenario: deviation
     tier: desktop
     verifies: [FR-8.7, FR-5.2]
-    # Regression: with SuppressHotkey on, the system key state reads "up" for the
-    # whole hold, so reconciling on it alone fragments the hold into ~250 ms
-    # sessions that are each discarded as a tap. Observed on 0.1.10.
+    # With SuppressHotkey on the system key state reads "up" for the whole hold,
+    # so reconciling on it alone fragments the hold into tick-length sessions,
+    # each discarded as a tap. Auto-repeat is the signal that must carry it.
     oracle: exactly one recording.start; recording.stop reason=Released held≈3000ms
     status: designed
 
@@ -486,7 +486,7 @@ tests:
 #   host      16 implemented, all passing · 3 designed
 #   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
 #   desktop   15 designed · 2 executed (DT-16 fail on 0.1.3 then fixed, DT-17 pass)
-#   workflow   1, blocked on O-01
+#   workflow   1 designed (W-01), acceptance gate
 #
 # What that does and does not mean. Verified: the pure logic — sanitisation,
 # degradation, WAV framing, response parsing, prompt construction — plus the fact

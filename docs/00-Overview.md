@@ -13,7 +13,6 @@ Not planes, but load-bearing:
 
 | File | Contents |
 |---|---|
-| [`open-issues.md`](open-issues.md) | Questions still unanswered, each with who can answer it |
 | [`../testing/test-plan.yaml`](../testing/test-plan.yaml) | Every test: its tier, the requirements it discharges, what it last produced |
 | `../CLAUDE.md` | How to collaborate with the assistant on this repository |
 
@@ -25,7 +24,8 @@ Ask in order, first yes wins:
 2. Constrains how code is written or verified? → **Harness**
 3. Tells a human how to run or recover it? → **UserDocumentation**
 4. About working with the assistant? → `CLAUDE.md`
-5. Why a past decision was made? → the FSD §1.4 (product) or Harness §0 (implementation), beside the thing it explains
+5. Why a decision was made? → the FSD §1.4 (product) or Harness §0 (implementation), beside the thing it explains
+6. What it used to do, or when it changed? → the git history. **The planes carry only what is true now** — no dates, no version narratives, no record of superseded behaviour
 
 Two questions settle the hard cases: *could a black-box tester verify it?*
 (yes → WHAT) and *would it survive a rewrite in another language?* (no → HOW).

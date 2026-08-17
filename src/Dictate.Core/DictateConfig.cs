@@ -12,19 +12,33 @@ namespace Dictate.Core;
 public sealed class DictateConfig
 {
     /// <summary>
-    /// Virtual-key code held to dictate. Default 0xA3 = VK_RCONTROL.
-    /// Right Alt is deliberately not the default: on a Swiss layout it is AltGr,
-    /// and swallowing it would cost the user @ { } [ ] \.
+    /// Virtual-key code held to dictate. Default 0x5C = VK_RWIN.
+    ///
+    /// Right Ctrl was the original default and is a worse one: Ctrl+scroll is
+    /// browser zoom, so every zoom starts a dictation. Right Windows has no such
+    /// partner — it is the one key on a full keyboard that nothing competes for.
+    ///
+    /// Right Alt is deliberately not the default either: on a Swiss layout it is
+    /// AltGr, and swallowing it would cost the user @ { } [ ] \.
+    ///
+    /// Left and right are separate codes. 0x5B is the *left* Windows key, which
+    /// most Windows shortcuts are built on; do not substitute one for the other.
     /// </summary>
-    public int HotkeyVirtualKey { get; set; } = 0xA3;
+    public int HotkeyVirtualKey { get; set; } = 0x5C;
 
     /// <summary>
     /// Whether the hotkey is swallowed instead of reaching the focused window.
-    /// Off by default (FR-8.4): Right Ctrl alone does nothing in almost every
-    /// application, whereas swallowing it breaks every Ctrl+key combination made
-    /// with that hand.
+    ///
+    /// On by default, because the default hotkey requires it: a Windows key
+    /// pressed and released with nothing in between opens the Start menu, so
+    /// without suppression every dictation would open it (FR-8.4).
+    ///
+    /// Turn it off if you move the hotkey to a key that is already inert —
+    /// Right Ctrl or Scroll Lock — since suppression is the more delicate mode.
+    /// It must stay symmetric to be safe, and only the hook can know whether it
+    /// owns a given key-up; see <c>HotkeyListener</c>.
     /// </summary>
-    public bool SuppressHotkey { get; set; }
+    public bool SuppressHotkey { get; set; } = true;
 
     /// <summary>
     /// Ignore hotkey presses that were synthesised by another process rather than
@@ -143,8 +157,9 @@ public sealed class DictateConfig
     /// language. The device must therefore already be open when a session
     /// starts, which means staying open across the pauses in normal use.
     ///
-    /// The counter-pressure is O-08: held open around the clock, dictate sits on
-    /// the output endpoint and stops it idling. Five minutes keeps it warm for a
+    /// The counter-pressure is that a device held open around the clock keeps
+    /// dictate sitting on the output endpoint, stopping it idling and
+    /// interfering with whatever else uses it. Five minutes keeps it warm for a
     /// working session and lets it go when the user has actually stopped.
     /// </summary>
     public int FeedbackIdleSeconds { get; set; } = 300;

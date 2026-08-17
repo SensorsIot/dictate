@@ -77,7 +77,7 @@ jobs:
             Download `dictate.exe`, then run `dictate.exe --auth` once to store
             your ElevenLabs and Anthropic keys in Windows Credential Manager.
 
-            Hold **Right Ctrl**, speak, release.
+            Hold **Right Windows**, speak, release.
 
             Windows SmartScreen will warn about an unsigned executable on first
             run: *More info -> Run anyway*.

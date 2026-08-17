@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Released — v0.1.15. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement. §5 and §8 were substantially revised after field use: six defects in the session lifecycle, each traced from the diagnostic log |
+| **Status** | Released — v0.1.15. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
 | **Version** | 0.1.15 |
 | **Last updated** | 2026-08-17 |
 | **Derives from** | A design interview on 2026-08-16; the choices it settled are in §1.4 |
@@ -34,11 +34,10 @@ browsers and chat clients. Speech is German, English, or both in the same
 sentence. The vocabulary includes project names and radio call signs that no
 general speech model spells correctly.
 
-### 1.3 What "done" looks like — the standard journey `[assumed]`
+### 1.3 What "done" looks like — the standard journey `[user]`
 
 The FSD is a set of clauses; none of them describes an ordinary successful run.
-This is that run, and it is the acceptance gate. **Not yet confirmed by the user
-— confirm before building the workflow test W-01.**
+This is that run, and it is the acceptance gate for workflow test W-01.
 
 | # | Step | Observable |
 |---|---|---|
@@ -321,8 +320,17 @@ message returned by the failing service, truncated to 500 characters.
 ## 8. Hotkey
 
 **FR-8.1** [Must] `[user]` The application shall detect press and release of a
-configurable virtual-key code, default `0xA3` (Right Ctrl), globally — regardless
-of which application has focus.
+configurable virtual-key code, default `0x5C` (Right Windows), globally —
+regardless of which application has focus.
+
+> The hotkey must be a key with no meaning of its own, because it is held for
+> seconds at a time. Right Windows qualifies; Right Ctrl does not, since
+> Ctrl+scroll is browser zoom and every zoom would hold the key past
+> `MinimumHoldMs` and start a dictation. Right Alt is AltGr on a Swiss layout.
+>
+> Left and right are distinct virtual keys here, unlike Ctrl, which also has a
+> generic code. `0x5B` is the left Windows key and carries most of the system
+> shortcuts; only `0x5C` is free.
 
 **FR-8.2** [Must] `[derived]` Keyboard auto-repeat shall not generate additional
 press events.
@@ -333,12 +341,24 @@ be interpreted as hotkey events.
 > Without this, dictating a sentence while the hotkey character is in the text
 > re-triggers the session. Implemented by stamping `dwExtraInfo`.
 
-**FR-8.4** [Should] `[assumed]` The hotkey shall be passed through to the focused
-application by default, and suppressed only if the user opts in.
+**FR-8.4** [Should] `[user]` The hotkey shall be suppressed by default, and a
+suppressed key-up shall be swallowed only if the matching key-down was.
 
-> Rationale: Right Ctrl alone is a no-op in nearly every application, whereas
-> swallowing it breaks every Ctrl+key combination made with that hand. `[assumed]`
-> — the user chose the key (§1.4) but not the suppression behaviour.
+> The default hotkey requires it: a Windows key released with nothing pressed in
+> between opens the Start menu, so a passed-through hotkey opens it on every
+> dictation. A user who moves the hotkey to an already-inert key should turn
+> suppression off with it.
+>
+> The second clause is the cost of the first. Suppression that is not symmetric
+> corrupts the system's key state: if the hook is installed while the key is
+> already held — which happens whenever the application restarts mid-press — the
+> key-down has already reached the system, and swallowing the key-up leaves
+> Windows believing the key is still held. With a modifier that turns every
+> subsequent keystroke into a chord, and the keyboard appears to fail.
+>
+> **VC** — *Pre:* hotkey physically held, dictate not running. *Stimulus:* start
+> dictate, then release the key. *Expect:* `GetAsyncKeyState` reports the key up.
+> *Must not:* a modifier left held at the system level. *Tier:* desktop.
 
 **NFR-8.5** [Must] `[derived]` The application shall run unelevated.
 
@@ -346,9 +366,16 @@ application by default, and suppressed only if the user opts in.
 > unelevated windows. Running as administrator would stop dictation working in
 > ordinary applications.
 
-**FR-8.6** [Must] `[derived]` Every hotkey press shall be recorded with whether it
+**FR-8.6** [Must] `[assumed]` Every hotkey press shall be recorded with whether it
 was synthesised by another process, and presses so synthesised shall be
 ignorable by configuration (`IgnoreInjectedHotkey`, default off).
+
+> `[assumed]` on the default only. dictate can rule out its own synthetic
+> keystrokes by signature (FR-8.3) but not anyone else's, and for a push-to-talk
+> an unasked-for press means an open microphone. Rejecting synthetic input cannot
+> be the default, because remote-desktop tools deliver the user's genuine
+> keystrokes the same way — so the origin is always recorded and the choice is
+> left open. If injected presses show up in the log, the default flips.
 
 > dictate can rule out its own synthetic keystrokes by signature (FR-8.3) but not
 > anyone else's. Mouse software, CAD input devices and macro tools all map buttons
@@ -380,10 +407,9 @@ that is still held shall never be treated as released.
 > The bound is read from the machine (`SPI_GETKEYBOARDDELAY`,
 > `SPI_GETKEYBOARDSPEED`) rather than fixed at the slowest Windows permits, and
 > two graces are kept: the full initial delay until the first repeat arrives, and
-> four repeat periods after it. On a typical machine — 500 ms delay, 30 repeats
-> per second — that is 650 ms falling to 282 ms, against 1150 ms if the worst
-> case were assumed throughout. Both are logged at startup as `graceInitial` and
-> `graceRepeat`.
+> four repeat periods after it. On a machine set to a 500 ms delay and 30 repeats
+> per second that is 650 ms falling to 282 ms. Both are logged at startup as
+> `graceInitial` and `graceRepeat`.
 >
 > **VC** — *Pre:* `Recording`. *Stimulus:* suppress the key-up (release while an
 > elevated window has focus). *Expect:* the session ends within the initial delay
@@ -420,11 +446,16 @@ captured before the failure shall still be processed.
 **FR-10.2** [Must] `[user]` The Scribe model identifier shall be configurable,
 default `scribe_v2`.
 
-> `scribe_v2` confirmed by the user on 2026-08-16 (O-03). It stays configurable
-> so a future Scribe generation is a settings change, not a rebuild.
+> It stays configurable so a future Scribe generation is a settings change,
+> not a rebuild.
 
 **FR-10.3** [Must] `[user]` When `Language` is `Auto` no `language_code` shall be
 sent; when it is `German` or `English`, `de` or `en` shall be sent respectively.
+
+> There is deliberately no second hotkey to pin the language for a single
+> utterance: the config setting is enough. Note that a language misdetection is
+> usually a symptom of truncated capture rather than of detection itself — a
+> per-utterance override would mask that instead of surfacing it.
 
 **FR-10.4** [Must] `[derived]` `tag_audio_events` and `diarize` shall both be
 sent as `false`.
@@ -494,7 +525,10 @@ shall be delivered correctly as surrogate pairs.
 `InjectionChunkSize` (default 200) with `InjectionChunkDelayMs` between batches.
 
 > One `SendInput` call per paragraph rather than per character; the chunk size is
-> the escape hatch for applications that drop fast input (R-06).
+> the escape hatch for applications that drop fast input (R-06). No application
+> in use has needed it, so the delay stays at zero — a `delivery.failed` entry in
+> the log, or characters missing from a delivered sentence, is the signal to
+> lower the batch size.
 
 **FR-12.4** [Must] `[derived]` A partial delivery shall be reported as a failure.
 
@@ -604,27 +638,31 @@ whom that is unacceptable needs a local model, which is a different product.
 
 ## 19. Performance
 
-**NFR-19.1** [Should] `[assumed]` The median interval between hotkey release and
+**NFR-19.1** [Should] `[user]` The median interval between hotkey release and
 text appearing shall be under 2.5 s for a 10-second utterance on a domestic
 connection.
+
+> If this ever stops holding, streaming transcription is the lever — Harness §0.
 
 **NFR-19.2** [Must] `[derived]` Neither network call shall block the UI thread.
 
 **NFR-19.5** [Must] `[derived]` No audio-device open shall happen on the UI
 thread.
 
-> Opening a device is unbounded — 3.2 s was measured on the user's machine for
-> the output device — and the UI thread is where the session state machine runs.
-> Hotkey events reach it through `BeginInvoke`, so a block there stops the
-> *release* being processed: the user holds the key, lets go, and nothing
-> happens until an unrelated sound device has finished opening. The feedback
-> tones are the case that mattered, because FR-14.x closes that device after 30 s
-> of quiet and so re-pays the cost all day.
+> Opening an audio device is unbounded — seconds, on a machine with many
+> endpoints — and the UI thread is where the session state machine runs. Hotkey
+> events reach it through `BeginInvoke`, so a block there stops the *release*
+> being processed: the user holds the key, lets go, and nothing happens until an
+> unrelated sound device has finished opening. Opening the output device also
+> stalls the capture stream, so the cost is paid in lost audio as well as in
+> latency — which is why the feedback device is warmed at startup and kept open
+> across the pauses in normal use (`FeedbackIdleSeconds`).
 >
 > **VC** — *Pre:* dictate idle for over a minute. *Stimulus:* press and hold.
 > *Expect:* `recording.start` is written within 250 ms of the press — compare its
 > timestamp against `held` on the matching `recording.stop`. *Tier:* desktop.
-> *Evidence:* `feedback.open` records what the open actually cost.
+> *Evidence:* `feedback.open` records what the open cost, `mic.firstBuffer` what
+> capture cost.
 
 **NFR-19.3** [Should] `[derived]` Idle memory shall stay under 100 MB.
 
@@ -654,6 +692,12 @@ API.
 **FR-20.4** [Must] `[derived]` The published exe shall run on a Windows 11 x64
 machine with no .NET runtime installed.
 
+**FR-20.5** [Won't] `[user]` The published exe is not code-signed.
+
+> SmartScreen therefore warns on first run, and the user clicks through
+> *More info → Run anyway*. A signing certificate is an annual cost for a tool
+> with one operator; the warning is a one-time click per release.
+
 ## 21. Verification
 
 Test declarations live in [`../../testing/test-plan.yaml`](../../testing/test-plan.yaml)
@@ -672,8 +716,8 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 
 | Key | Type | Default | Requirement |
 |---|---|---|---|
-| `HotkeyVirtualKey` | int | `0xA3` (Right Ctrl) | FR-8.1 |
-| `SuppressHotkey` | bool | `false` | FR-8.4 |
+| `HotkeyVirtualKey` | int | `0x5C` (Right Windows) | FR-8.1 |
+| `SuppressHotkey` | bool | `true` | FR-8.4 |
 | `IgnoreInjectedHotkey` | bool | `false` | FR-8.6 |
 | `MinimumHoldMs` | int | `300` | FR-5.2 |
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |

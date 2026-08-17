@@ -9,7 +9,7 @@ English, including both in the same sentence.
 Nothing is saved. No audio file, no transcript, no history on disk.
 
 ```
-Hold Right Ctrl ─▶ speak ─▶ release ─▶ ~1.5 s ─▶ text is typed at your caret
+Hold Right Win ─▶ speak ─▶ release ─▶ ~1.5 s ─▶ text is typed at your caret
 ```
 
 ## How it works

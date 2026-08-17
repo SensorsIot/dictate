@@ -53,8 +53,8 @@ internal sealed class Feedback : IDisposable
     /// does not pay for it.
     ///
     /// The idle countdown is armed exactly as a real tone would arm it, so this
-    /// does not quietly reintroduce what O-08 fixed: if no dictation follows
-    /// within the timeout the device closes again and dictate goes back to not
+    /// does not turn into holding the device open indefinitely: if no dictation
+    /// follows within the timeout it closes again, and dictate goes back to not
     /// holding a stream on the speakers.
     /// </summary>
     internal void PreWarm()

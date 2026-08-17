@@ -74,8 +74,8 @@ The settings you are most likely to want:
 |---|---|---|
 | `Language` | `Auto` | `German` or `English` pins the language when auto-detection keeps guessing wrong on short phrases |
 | `Vocabulary` | project terms | Words to spell exactly this way — project names, call signs, jargon |
-| `HotkeyVirtualKey` | `163` (Right Ctrl) | Virtual-key code to hold — see the table below for the ones worth using |
-| `SuppressHotkey` | `false` | Swallow the hotkey instead of passing it to the focused window. Required for the Windows key, which otherwise opens the Start menu on every dictation |
+| `HotkeyVirtualKey` | `92` (Right Windows) | Virtual-key code to hold — see the table below for the ones worth using |
+| `SuppressHotkey` | `true` | Swallow the hotkey instead of passing it to the focused window. Required for the Windows key, which otherwise opens the Start menu on every dictation. Turn it off if you move the hotkey to an already-inert key |
 | `IgnoreInjectedHotkey` | `false` | Ignore hotkey presses synthesised by other software (mouse-button mappings, macro tools). Leave off if you dictate over AnyDesk, TeamViewer or RDP — those deliver your real keystrokes the same way |
 | `MinimumHoldMs` | `300` | Presses shorter than this are ignored as accidental taps |
 | `MaximumRecordingSeconds` | `120` | Hard stop, so a stuck key cannot upload your afternoon |
@@ -100,9 +100,9 @@ fires on the right Ctrl.
 | Key | Number | Notes |
 |---|---|---|
 | Left Ctrl | `162` | Breaks Ctrl+C and every other left-hand chord if suppressed |
-| **Right Ctrl** | **`163`** | The default. Does nothing on its own in almost every application |
+| Right Ctrl | `163` | Inert on its own, but it is also browser zoom — Ctrl+scroll would start a dictation every time you zoom |
 | Left Windows | `91` | Needs `SuppressHotkey`. Also the key most Windows shortcuts are built on |
-| **Right Windows** | **`92`** | Needs `SuppressHotkey`. The best choice if you never use it — nothing else competes for it |
+| **Right Windows** | **`92`** | The default. Needs `SuppressHotkey`, which is on by default. Nothing else competes for it |
 | Left Alt | `164` | Opens the menu bar of the focused window on its own |
 | Right Alt | `165` | **Do not use.** On a Swiss keyboard this is AltGr, and you would lose `@ { } [ ] \` |
 | Scroll Lock | `145` | Genuinely unused on modern machines, but absent from many compact keyboards |
@@ -178,9 +178,9 @@ Turn the diagnostic log on first — it answers most of these directly.
 | Nothing typed, no error | The focused window is running as administrator. Windows will not let an unelevated process send it input, and running dictate elevated breaks every *other* application instead. |
 | Text lands in the wrong application | The wrong window had focus when you pressed the key. Press Ctrl+V — every utterance is on the clipboard too. |
 | Text goes to the clipboard every time | You are switching windows before the text is ready. That is the safety net working, not a fault. |
-| The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` in the log — it says how long the microphone took to deliver anything. If a `feedback.open` sits beside it with a similar duration, the sound device was opening and stalled capture while it did; that is fixed in 0.1.15, and `FeedbackIdleSeconds` governs how often it can recur. If `mic.firstBuffer` is large with no `feedback.open` nearby, the interface itself is slow to spin up — set `"KeepMicrophoneOpen": true`. |
-| A held key produces several short utterances instead of one | Fixed in 0.1.15. Before it, a suppressed hotkey read as released the whole time it was held, so the session restarted on every auto-repeat. `recording.stop reason=Reconciled` on every one is the signature. |
-| The keyboard stops responding, or every key acts as a shortcut | A modifier is stuck down at the system level. Fixed in 0.1.15, which no longer swallows a key-up whose key-down the system already saw. To recover: tap the hotkey once. |
+| The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` — it says how long the microphone took to deliver anything. If a `feedback.open` of similar duration sits beside it, the sound device was opening and stalled capture; raise `FeedbackIdleSeconds` so it stays open across your pauses. If `mic.firstBuffer` is large with no `feedback.open` nearby, the interface itself is slow to spin up — set `"KeepMicrophoneOpen": true`. |
+| A held key produces several short utterances instead of one | Every `recording.stop` will read `reason=Reconciled`. dictate is deciding the key was released while you are still holding it — check that `SuppressHotkey` matches your hotkey, and report it with the log. |
+| The keyboard stops responding, or every key acts as a shortcut | A modifier is stuck down at the system level. Tap the hotkey once to clear it. |
 | Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired Anthropic key. |
 | A German sentence comes back in English | A bug, not a setting. Cleanup is explicitly instructed never to translate. Please report it. |
 | A term is consistently mis-spelled | Add it to `Vocabulary` in the config. |
