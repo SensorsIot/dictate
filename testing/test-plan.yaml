@@ -290,7 +290,14 @@ tests:
     scenario: deviation
     tier: desktop
     verifies: [FR-5.3]
+    steps: >
+      Hold the hotkey past MaximumRecordingSeconds — lower it to 10 in config
+      first rather than holding for two minutes. Expect an error beep and a
+      balloon at the limit, then the pipeline running on what was captured, and
+      recording.stop reason=Limit in the log. The eventual real key-up must be a
+      no-op, not a second session.
     status: designed
+    last_result: never_run
 
   - id: DT-08
     name: A second press during transcription is ignored
@@ -405,9 +412,16 @@ tests:
     #     \ConsentStore\microphone\NonPackaged\C:#...#dictate.exe
     oracle: consent-store LastUsedTimeStop becomes non-zero after release
     status: designed
+    last_result: never_run
+    steps: >
+      Needs the key-up to be genuinely lost, which means UIPI rather than a
+      trick: open a window running as administrator, hold the hotkey, click into
+      the elevated window while still holding, release it there. Read
+      LastUsedTimeStop under ConsentStore\microphone\NonPackaged for dictate.exe
+      before and after.
 
   - id: DT-22
-    name: A press after a long idle is not delayed by the output device opening
+    name: A press after a long idle is not delayed by a first-use cost
     kind: atomic
     scenario: deviation
     tier: desktop
@@ -416,7 +430,24 @@ tests:
     # the matching stop. They diverge when something blocks the UI thread — an
     # audio-device open being the case that costs audio as well as latency.
     oracle: recording.start timestamp minus (stop timestamp - held) < 250ms
-    status: designed
+    steps: >
+      Start dictate, wait past FeedbackIdleSeconds, then press and hold. Compute
+      the press time from the stop line as (stop timestamp - held) and compare it
+      against the recording.start timestamp. Repeat immediately for a second
+      press: the pair separates a first-use cost from a recurring one.
+    status: implemented
+    last_result: fail
+    evidence: >
+      Two consecutive presses on the Windows machine against 0.1.16, first
+      dictation after a fresh start:
+        press 1  recording.start 23:24:00.764, press implied 23:24:00.149 -> 615ms
+        press 2  recording.start 23:24:34.974, press implied 23:24:34.964 ->  10ms
+      So a first-use cost, not a recurring one, and not the output device — that
+      had already opened at startup (feedback.open took=3306ms, logged 23:20:40).
+      What remains between _recorder.Start returning and the log line is
+      SetState, whose ShowState performs the overlay's first real Show. PreWarm
+      creates the overlay handle but never shows the window, so layout and paint
+      are still paid on the first dictation.
 
   - id: DT-21
     name: A suppressed hotkey held for three seconds is one session, not eleven
@@ -428,7 +459,18 @@ tests:
     # so reconciling on it alone fragments the hold into tick-length sessions,
     # each discarded as a tap. Auto-repeat is the signal that must carry it.
     oracle: exactly one recording.start; recording.stop reason=Released held≈3000ms
-    status: designed
+    steps: >
+      Must be a human finger. keybd_event cannot stand in: synthetic keys do not
+      auto-repeat, and auto-repeat is the liveness signal a suppressed hold
+      depends on, so any synthetic hold longer than graceInitial is cut short by
+      the reconciler and the test measures the harness rather than the product.
+    status: implemented
+    last_result: pass
+    evidence: >
+      Three-second hold on the Windows machine with SuppressHotkey on: one
+      recording.start, recording.stop reason=Released held=3564ms. Six
+      consecutive utterances afterwards were each a single session, holds of
+      1668-10302ms, every stop reason=Released.
 
   - id: DT-19
     name: A hotkey synthesised by another process is recorded as injected
@@ -437,7 +479,17 @@ tests:
     tier: desktop
     verifies: [FR-8.6]
     oracle: recording.start logs injected=True; with IgnoreInjectedHotkey on, hotkey.rejected instead
-    status: designed
+    steps: >
+      keybd_event(0x5C, 0, 0, 0) to press and (..., 2, ...) to release, from any
+      unelevated process. Note that only the injected flag is under test here —
+      see DT-21 on why a synthetic press cannot stand in for a real hold.
+    status: implemented
+    last_result: pass
+    evidence: >
+      Synthetic press against 0.1.16, IgnoreInjectedHotkey off:
+        recording.start  pressToCapture=10ms  injected=True  lowerIL=False
+      The second half of the oracle — hotkey.rejected with the setting on — is
+      not yet exercised.
 
   - id: DT-20
     name: The capture device is released after every press across a hundred cycles
@@ -448,7 +500,41 @@ tests:
     # The leak this catches is intermittent — a race between StopRecording and
     # Dispose — so one cycle proves nothing. Watch mic.close confirmed=False.
     oracle: consent-store LastUsedTimeStop non-zero after each cycle; no mic.close confirmed=False
+    steps: >
+      Tap the hotkey repeatedly for a minute, then read the consent-store key and
+      grep the log for mic.close confirmed=False. Taps below MinimumHoldMs are
+      fine and cheapest — the device still opens and closes on each one.
     status: designed
+    last_result: never_run
+    note: >
+      Around twenty consecutive open/close cycles have been observed clean,
+      including eleven inside three seconds, every one mic.close confirmed=True.
+      Encouraging, but well short of the count this test asks for, and the race
+      it targets is intermittent.
+
+  - id: DT-23
+    name: A hotkey held while dictate starts does not leave the key stuck down
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-8.4]
+    # Suppression must be symmetric. If the key-down reached the system before
+    # the hook existed, swallowing the key-up strands the modifier down and every
+    # later keystroke becomes a chord.
+    oracle: GetAsyncKeyState(hotkey) reports up after the release
+    steps: >
+      With dictate not running, press and hold the hotkey; confirm
+      GetAsyncKeyState reports it down. Start dictate, wait for the tray icon,
+      then release. Read GetAsyncKeyState again. keybd_event is a valid stand-in
+      here — the test is about which half of the pair the hook swallows, not
+      about hold duration.
+    status: implemented
+    last_result: pass
+    evidence: >
+      Synthetic run against 0.1.13 with SuppressHotkey on, hotkey 0x5C:
+        key down, dictate not running -> GetAsyncKeyState reports down: True
+        dictate started, key released  -> GetAsyncKeyState reports down: False
+      The same sequence against 0.1.12 left the key stranded down.
 
   # ---- workflow: the acceptance gate -----------------------------------------
 
@@ -480,13 +566,18 @@ tests:
 
 # ---- honest position --------------------------------------------------------
 #
-# As of run 31955257714 (2026-08-16), 41 assertions across 12 host tests pass on
-# ubuntu-latest, and the whole solution — including the Windows head — compiles.
+# 71 assertions across the host tests pass on ubuntu-latest on every push, and
+# the whole solution — including the Windows head — compiles.
 #
 #   host      16 implemented, all passing · 3 designed
 #   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
-#   desktop   15 designed · 2 executed (DT-16 fail on 0.1.3 then fixed, DT-17 pass)
+#   desktop   6 executed (DT-16 fail, DT-17 DT-19 DT-21 DT-23 pass, DT-22 fail)
+#             · the rest designed, each with steps a human can follow
 #   workflow   1 designed (W-01), acceptance gate
+#
+# The desktop tier is manual by decision, not by omission — see tiers.desktop.
+# `designed` there means the procedure is written and nobody has run it, not
+# that code is missing.
 #
 # What that does and does not mean. Verified: the pure logic — sanitisation,
 # degradation, WAV framing, response parsing, prompt construction — plus the fact
