@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | Released — v0.1.9. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
-| **Version** | 0.1.9 |
-| **Last updated** | 2026-08-16 |
+| **Status** | Released — v0.1.15. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement. §5 and §8 were substantially revised after field use: six defects in the session lifecycle, each traced from the diagnostic log |
+| **Version** | 0.1.15 |
+| **Last updated** | 2026-08-17 |
 | **Derives from** | A design interview on 2026-08-16; the choices it settled are in §1.4 |
 | **Complexity** | Medium |
 | **Plane** | WHAT — externally observable behaviour only. Build and code rules live in [`../Harness/`](../Harness/00-Overview.md); operating instructions in [`../UserDocumentation/Manual.md`](../UserDocumentation/Manual.md). |
@@ -689,6 +689,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `AppendSpaceAfterInsert` | bool | `true` | FR-6.4 |
 | `SilenceThreshold` | int | `200` | FR-9.3 |
 | `KeepMicrophoneOpen` | bool | `false` | FR-9.2 |
+| `FeedbackIdleSeconds` | int | `300` | NFR-19.5 |
 | `EnableDiagnosticLog` | bool | `false` | — |
 | `OverlayPosition` | enum | `BottomRight` | FR-14.2 |
 | `InjectionChunkSize` | int | `200` | FR-12.3 |
