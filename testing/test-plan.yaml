@@ -188,6 +188,21 @@ tests:
       (Swiss_spelling_applies_to_cleaned_and_fallback_text,
       Swiss_spelling_can_be_turned_off).
 
+  - id: R-01
+    name: Rust core port passes the host-tier suite ported from Dictate.Core.Tests
+    kind: suite
+    scenario: standard
+    tier: host
+    file: rust/dictate-core/tests/
+    verifies: []
+    status: implemented
+    last_result: never_run
+    note: >
+      Branch rust-port only. Evidence that the Rust core matches the C# one, not
+      evidence for any requirement: the shipped binary is still C#, so crediting
+      FR ids here would mark requirements verified by code nobody runs. Once the
+      Rust head ships, split this into per-requirement entries.
+
   # ---- host tier: designed, not yet implemented ------------------------------
 
   - id: H-13

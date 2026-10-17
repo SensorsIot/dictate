@@ -6,7 +6,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, rust-port]
   pull_request:
   workflow_dispatch:
 
@@ -45,6 +45,21 @@ jobs:
           name: host-test-results
           path: '**/TestResults/*.trx'
           if-no-files-found: warn
+
+  rust-core:
+    name: Host tier (dictate-core, Rust port)
+    runs-on: ubuntu-latest
+    if: hashFiles('rust/Cargo.toml') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Same rule as Dictate.Core: compiling on Linux is what keeps the Rust
+      # core platform-free.
+      - name: Test
+        working-directory: rust
+        run: cargo test --all-targets
 
   compile-windows-head:
     name: Windows head compiles

@@ -1,0 +1,19 @@
+[package]
+name = "dictate-core"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-free half of dictate: PCM in, deliverable text out."
+license = "MIT"
+publish = false
+
+# Platform-free on purpose, like Dictate.Core: CI compiles and tests this crate
+# on ubuntu-latest, so a Windows-only dependency here stops the build.
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+json5 = "0.4"
+# rustls rather than native-tls: no OpenSSL on the Linux runner, no schannel
+# surprises on Windows, one TLS stack everywhere.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "multipart", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
