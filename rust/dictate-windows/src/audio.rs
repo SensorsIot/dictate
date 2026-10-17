@@ -1,0 +1,374 @@
+//! Records the default input device straight to the format Scribe wants:
+//! 16 kHz, mono, 16-bit PCM.
+//!
+//! winmm (waveIn) rather than WASAPI, as NAudio's WaveInEvent did: winmm
+//! converts to the requested format for us, whereas WASAPI shared mode hands
+//! back the device's mix format and would need a resampler in the hot path.
+//!
+//! Each open device belongs to one capture thread, which opens it, feeds it
+//! buffers, and closes it. That ownership is the fix for the C# version's
+//! hardest bug: there, the UI thread asked the device to stop and disposed it
+//! while winmm might still own the buffers, and a close that lost that race
+//! left the microphone indicator lit until the process exited. Here nothing
+//! but the capture thread ever touches the handle, and it closes only after
+//! waveInReset has returned every buffer.
+//!
+//! Two modes, because opening a capture device costs real time:
+//!   * default — open on press, close on release. The microphone indicator is
+//!     only lit while recording.
+//!   * KeepMicrophoneOpen — the device stays open and buffers are simply
+//!     dropped outside a session.
+
+use std::mem::size_of;
+use std::ptr::null;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use dictate_core::wav;
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+use windows_sys::Win32::Media::Audio::{
+    waveInAddBuffer, waveInClose, waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset, waveInStart,
+    waveInUnprepareHeader, CALLBACK_EVENT, HWAVEIN, WAVEFORMATEX, WAVEHDR, WAVE_MAPPER, WHDR_DONE,
+};
+use windows_sys::Win32::System::Threading::{CreateEventW, SetEvent, WaitForSingleObject};
+
+/// 50 ms buffers: small enough that release-to-upload is not waiting on a
+/// half-full buffer, large enough to be cheap.
+const BUFFER_BYTES: usize = 1600;
+const BUFFER_COUNT: usize = 3;
+
+/// How long a press waits for the device to open before reporting failure.
+const OPEN_TIMEOUT: Duration = Duration::from_secs(3);
+
+pub enum RecorderEvent {
+    /// MaximumRecordingSeconds was hit.
+    LimitReached,
+    /// How long after `start` the first buffer arrived. Separates a stalled
+    /// capture stream from an interface that needs time to spin up — both
+    /// otherwise read as "the microphone produced only silence".
+    FirstBuffer(Duration),
+    /// A device was closed; false if waveInClose reported failure, which is the
+    /// signature of a handle Windows still considers in use.
+    DeviceClosed(bool),
+}
+
+pub type Notify = Arc<dyn Fn(RecorderEvent) + Send + Sync>;
+
+struct Capture {
+    recording: bool,
+    buffer: Vec<u8>,
+    capped: bool,
+    first_seen: bool,
+    started: Instant,
+}
+
+struct Inner {
+    // Lock order: device before capture. The capture thread takes only capture.
+    device: Mutex<Option<Device>>,
+    capture: Mutex<Capture>,
+    notify: Notify,
+    keep_open: bool,
+    max_bytes: usize,
+}
+
+pub struct Recorder {
+    inner: Arc<Inner>,
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+impl Recorder {
+    pub fn new(maximum_seconds: i32, keep_open: bool, notify: Notify) -> Self {
+        let bytes_per_second = wav::SAMPLE_RATE as usize * wav::CHANNELS as usize * wav::BITS_PER_SAMPLE as usize / 8;
+        Self {
+            inner: Arc::new(Inner {
+                device: Mutex::new(None),
+                capture: Mutex::new(Capture {
+                    recording: false,
+                    buffer: Vec::new(),
+                    capped: false,
+                    first_seen: false,
+                    started: Instant::now(),
+                }),
+                notify,
+                keep_open,
+                max_bytes: maximum_seconds.max(1) as usize * bytes_per_second,
+            }),
+        }
+    }
+
+    pub fn has_input_device() -> bool {
+        unsafe { waveInGetNumDevs() > 0 }
+    }
+
+    /// Pays the one-time costs — loading winmm, driver initialisation, and in
+    /// keep-open mode opening the device — at startup rather than on the first
+    /// press. Off the UI thread: it opens a capture device.
+    pub fn pre_warm(&self) {
+        if !Self::has_input_device() {
+            return;
+        }
+
+        let inner = Arc::clone(&self.inner);
+        thread::spawn(move || {
+            if inner.keep_open {
+                let _ = Inner::ensure_open(&inner);
+            } else if let Ok(device) = Device::open(Weak::new(), Arc::clone(&inner.notify)) {
+                // Pre-warming is an optimisation. If the device refuses now it
+                // reports the real error on the first press, where there is a
+                // user to tell.
+                device.close(true);
+            }
+        });
+    }
+
+    pub fn start(&self) -> Result<(), String> {
+        if lock(&self.inner.capture).recording {
+            return Ok(());
+        }
+
+        Inner::ensure_open(&self.inner)?;
+
+        let mut capture = lock(&self.inner.capture);
+        capture.buffer = Vec::with_capacity(self.inner.max_bytes.min(32_000 * 30));
+        capture.capped = false;
+        capture.first_seen = false;
+        capture.started = Instant::now();
+        capture.recording = true;
+        Ok(())
+    }
+
+    /// Stops recording and returns the captured PCM.
+    pub fn stop(&self) -> Vec<u8> {
+        let pcm = {
+            let mut capture = lock(&self.inner.capture);
+            if !capture.recording {
+                return Vec::new();
+            }
+            capture.recording = false;
+            std::mem::take(&mut capture.buffer)
+        };
+
+        if !self.inner.keep_open {
+            // Detached, not awaited: the capture thread closes the device and
+            // reports DeviceClosed. A new press opens a fresh one meanwhile.
+            if let Some(device) = lock(&self.inner.device).take() {
+                device.close(false);
+            }
+        }
+
+        pcm
+    }
+}
+
+impl Drop for Recorder {
+    fn drop(&mut self) {
+        {
+            let mut capture = lock(&self.inner.capture);
+            capture.recording = false;
+            capture.buffer = Vec::new();
+        }
+
+        // Awaited here: this is shutdown, and a thread racing process exit is
+        // how a handle leaks anyway.
+        if let Some(device) = lock(&self.inner.device).take() {
+            device.close(true);
+        }
+    }
+}
+
+impl Inner {
+    fn ensure_open(inner: &Arc<Inner>) -> Result<(), String> {
+        let mut device = lock(&inner.device);
+        if device.is_none() {
+            *device = Some(Device::open(Arc::downgrade(inner), Arc::clone(&inner.notify))?);
+        }
+        Ok(())
+    }
+
+    /// Called on the capture thread for every filled buffer.
+    fn accept(&self, bytes: &[u8]) {
+        let mut capture = lock(&self.capture);
+
+        // In keep-open mode this runs continuously; buffers outside a session
+        // are dropped here and never stored anywhere.
+        if !capture.recording || capture.capped {
+            return;
+        }
+
+        if !capture.first_seen {
+            capture.first_seen = true;
+            (self.notify)(RecorderEvent::FirstBuffer(capture.started.elapsed()));
+        }
+
+        let remaining = self.max_bytes.saturating_sub(capture.buffer.len());
+        if remaining == 0 {
+            capture.capped = true;
+            (self.notify)(RecorderEvent::LimitReached);
+            return;
+        }
+
+        let take = bytes.len().min(remaining);
+        capture.buffer.extend_from_slice(&bytes[..take]);
+    }
+}
+
+/// An auto-reset event shared by the capture thread and the handle that stops
+/// it, closed when the last of the two lets go.
+struct Event(isize);
+
+impl Event {
+    fn new() -> Result<Self, String> {
+        let handle = unsafe { CreateEventW(null(), 0, 0, null()) };
+        if handle.is_null() {
+            Err("Could not create the capture event.".into())
+        } else {
+            Ok(Self(handle as isize))
+        }
+    }
+
+    fn handle(&self) -> HANDLE {
+        self.0 as HANDLE
+    }
+}
+
+impl Drop for Event {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.handle()) };
+    }
+}
+
+struct Device {
+    stop: Arc<AtomicBool>,
+    wake: Arc<Event>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Device {
+    fn open(sink: Weak<Inner>, notify: Notify) -> Result<Self, String> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let wake = Arc::new(Event::new()?);
+        let (ready_tx, ready_rx) = mpsc::channel();
+
+        let thread = {
+            let stop = Arc::clone(&stop);
+            let wake = Arc::clone(&wake);
+            thread::Builder::new()
+                .name("dictate-capture".into())
+                .spawn(move || capture_thread(sink, notify, stop, wake, ready_tx))
+                .map_err(|e| format!("Could not start the capture thread: {e}"))?
+        };
+
+        let device = Self { stop, wake, thread: Some(thread) };
+
+        match ready_rx.recv_timeout(OPEN_TIMEOUT) {
+            Ok(Ok(())) => Ok(device),
+            Ok(Err(message)) => {
+                device.close(true);
+                Err(message)
+            }
+            Err(_) => {
+                device.close(false);
+                Err(format!("The microphone did not open within {} s.", OPEN_TIMEOUT.as_secs()))
+            }
+        }
+    }
+
+    fn close(mut self, wait: bool) {
+        self.stop.store(true, Ordering::SeqCst);
+        unsafe { SetEvent(self.wake.handle()) };
+
+        if wait {
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+}
+
+fn capture_thread(
+    sink: Weak<Inner>,
+    notify: Notify,
+    stop: Arc<AtomicBool>,
+    wake: Arc<Event>,
+    ready: mpsc::Sender<Result<(), String>>,
+) {
+    let header_size = size_of::<WAVEHDR>() as u32;
+    let format = WAVEFORMATEX {
+        wFormatTag: 1, // WAVE_FORMAT_PCM
+        nChannels: wav::CHANNELS,
+        nSamplesPerSec: wav::SAMPLE_RATE,
+        nAvgBytesPerSec: wav::SAMPLE_RATE * u32::from(wav::CHANNELS) * u32::from(wav::BITS_PER_SAMPLE) / 8,
+        nBlockAlign: wav::CHANNELS * wav::BITS_PER_SAMPLE / 8,
+        wBitsPerSample: wav::BITS_PER_SAMPLE,
+        cbSize: 0,
+    };
+
+    // The buffers must not move while winmm holds pointers into them, so they
+    // are allocated once, up front, and outlive the device.
+    let mut data: Vec<Vec<u8>> = (0..BUFFER_COUNT).map(|_| vec![0u8; BUFFER_BYTES]).collect();
+    let mut headers: Vec<WAVEHDR> = Vec::with_capacity(BUFFER_COUNT);
+
+    unsafe {
+        let mut device: HWAVEIN = std::mem::zeroed();
+        let opened = waveInOpen(&mut device, WAVE_MAPPER, &format, wake.handle() as usize, 0, CALLBACK_EVENT);
+        if opened != 0 {
+            let _ = ready.send(Err(format!("Could not open the microphone (MMSYSERR {opened}).")));
+            return;
+        }
+
+        for buffer in data.iter_mut() {
+            let mut header: WAVEHDR = std::mem::zeroed();
+            header.lpData = buffer.as_mut_ptr();
+            header.dwBufferLength = BUFFER_BYTES as u32;
+            headers.push(header);
+        }
+
+        for header in headers.iter_mut() {
+            waveInPrepareHeader(device, header, header_size);
+            waveInAddBuffer(device, header, header_size);
+        }
+
+        let started = waveInStart(device);
+        if started != 0 {
+            let _ = ready.send(Err(format!("Could not start the microphone (MMSYSERR {started}).")));
+        } else {
+            let _ = ready.send(Ok(()));
+
+            while !stop.load(Ordering::SeqCst) {
+                WaitForSingleObject(wake.handle(), 100);
+
+                for (header, buffer) in headers.iter_mut().zip(data.iter()) {
+                    if header.dwFlags & WHDR_DONE == 0 || stop.load(Ordering::SeqCst) {
+                        continue;
+                    }
+
+                    if let Some(inner) = sink.upgrade() {
+                        let recorded = (header.dwBytesRecorded as usize).min(buffer.len());
+                        inner.accept(&buffer[..recorded]);
+                    }
+
+                    header.dwFlags &= !WHDR_DONE;
+                    waveInAddBuffer(device, header, header_size);
+                }
+            }
+        }
+
+        // Reset returns every buffer to us; only then is unpreparing and
+        // closing safe.
+        waveInReset(device);
+        for header in headers.iter_mut() {
+            waveInUnprepareHeader(device, header, header_size);
+        }
+        let closed = waveInClose(device) == 0;
+
+        drop(headers);
+        drop(data);
+        notify(RecorderEvent::DeviceClosed(closed));
+    }
+}

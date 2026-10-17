@@ -60,6 +60,30 @@ jobs:
         working-directory: rust
         run: cargo test --all-targets
 
+  rust-windows:
+    name: Windows head builds (Rust port)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        working-directory: rust
+        run: cargo build --release -p dictate-windows
+
+      # The core again, on the platform it ships on.
+      - name: Test core
+        working-directory: rust
+        run: cargo test -p dictate-core
+
+      - name: Upload dictate.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictate-rust-exe
+          path: rust/target/release/dictate.exe
+          if-no-files-found: error
+
   compile-windows-head:
     name: Windows head compiles
     runs-on: ubuntu-latest

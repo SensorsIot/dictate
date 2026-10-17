@@ -1,0 +1,40 @@
+[package]
+name = "dictate-windows"
+version = "0.1.0"
+edition = "2021"
+description = "The Windows head of dictate: hotkey, microphone, tray, overlay, typing."
+license = "MIT"
+publish = false
+build = "build.rs"
+
+[[bin]]
+name = "dictate"
+path = "src/main.rs"
+
+[dependencies]
+dictate-core = { path = "../dictate-core" }
+
+# windows-sys rather than the windows crate: raw Win32 signatures, which can be
+# checked against the C documentation without a compiler to hand.
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.59"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Media",
+    "Win32_Media_Audio",
+    "Win32_Security",
+    "Win32_Security_Credentials",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+]
+
+[build-dependencies]
+embed-manifest = "1.4"
