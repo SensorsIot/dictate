@@ -108,6 +108,12 @@ public sealed class DictateConfig
 
     public LanguageMode Language { get; set; } = LanguageMode.Auto;
 
+    /// <summary>
+    /// Write German the Swiss way: ss, never ß. Applied to the delivered text,
+    /// cleaned or not.
+    /// </summary>
+    public bool SwissSpelling { get; set; } = true;
+
     /// <summary>ElevenLabs transcription model. Configurable because the Scribe generation moves.</summary>
     public string ScribeModelId { get; set; } = "scribe_v2";
 

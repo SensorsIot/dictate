@@ -99,6 +99,11 @@ public sealed class DictationPipeline
 
         var cleanupTime = clock.Elapsed;
 
+        if (_config.SwissSpelling)
+        {
+            cleaned = TextSanitizer.ToSwissSpelling(cleaned);
+        }
+
         return new Utterance
         {
             Status = cleanupError is null ? UtteranceStatus.Ok : UtteranceStatus.CleanupFailed,

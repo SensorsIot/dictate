@@ -40,6 +40,14 @@ public static class TextSanitizer
     /// and a terminal is where dictation is used most, so excluding it removed
     /// the separator from exactly the case that needed it.
     /// </summary>
+    /// <summary>
+    /// Swiss Standard German has no ß. Done here rather than in the cleanup
+    /// prompt so it holds for the raw-transcript fallback too (FR-7.1), and so
+    /// it does not depend on the model remembering.
+    /// </summary>
+    public static string ToSwissSpelling(string text) =>
+        text.Replace("ß", "ss").Replace("ẞ", "SS");
+
     public static string WithTrailingSpace(string text) =>
         text.Length == 0 ? text : text + " ";
 

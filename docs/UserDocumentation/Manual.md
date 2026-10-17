@@ -73,6 +73,7 @@ The settings you are most likely to want:
 | Setting | Default | What it does |
 |---|---|---|
 | `Language` | `Auto` | `German` or `English` pins the language when auto-detection keeps guessing wrong on short phrases |
+| `SwissSpelling` | `true` | Swiss Standard German spelling: `ss`, never `ß`. Applies even when cleanup fails |
 | `Vocabulary` | project terms | Words to spell exactly this way — project names, call signs, jargon |
 | `HotkeyVirtualKey` | `92` (Right Windows) | Virtual-key code to hold — see the table below for the ones worth using |
 | `SuppressHotkey` | `true` | Swallow the hotkey instead of passing it to the focused window. Required for the Windows key, which otherwise opens the Start menu on every dictation. Turn it off if you move the hotkey to an already-inert key |

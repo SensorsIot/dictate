@@ -92,6 +92,32 @@ public class PipelineTests
     }
 
     [Fact]
+    public async Task Swiss_spelling_applies_to_cleaned_and_fallback_text()
+    {
+        var cleaned = await Build(new StubTranscriber(new Transcript("die strasse", "de")),
+                                  new StubCleaner("Die Straße ist groß."))
+            .ProcessAsync(SomeAudio, TargetContext.Unknown);
+        var fallback = await Build(new StubTranscriber(new Transcript("die straße", "de")),
+                                   new StubCleaner(failure: new HttpRequestException("503")))
+            .ProcessAsync(SomeAudio, TargetContext.Unknown);
+
+        Assert.Equal("Die Strasse ist gross.", cleaned.Text);
+        Assert.Equal("die strasse", fallback.Text);
+    }
+
+    [Fact]
+    public async Task Swiss_spelling_can_be_turned_off()
+    {
+        var pipeline = Build(new StubTranscriber(new Transcript("die strasse", "de")),
+                             new StubCleaner("Die Straße."),
+                             new DictateConfig { SwissSpelling = false });
+
+        var result = await pipeline.ProcessAsync(SomeAudio, TargetContext.Unknown);
+
+        Assert.Equal("Die Straße.", result.Text);
+    }
+
+    [Fact]
     public async Task Transcription_failure_yields_no_text()
     {
         var pipeline = Build(new StubTranscriber(failure: new TranscriptionException("Scribe returned 401")),

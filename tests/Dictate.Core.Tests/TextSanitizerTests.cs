@@ -112,6 +112,20 @@ public class TextSanitizerTests
         Assert.True(TextSanitizer.LooksLikeConsole("cmd.exe"));
     }
 
+    [Theory]
+    [InlineData("Die Straße ist groß.", "Die Strasse ist gross.")]
+    [InlineData("GROẞ", "GROSS")]
+    [InlineData("Strasse", "Strasse")]
+    [InlineData("plain English", "plain English")]
+    public void Swiss_spelling_replaces_every_sharp_s(string input, string expected)
+    {
+        var result = TextSanitizer.ToSwissSpelling(input);
+
+        Assert.Equal(expected, result);
+        Assert.DoesNotContain('ß', result);
+        Assert.DoesNotContain('ẞ', result);
+    }
+
     [Fact]
     public void User_supplied_console_processes_are_honoured()
     {

@@ -512,6 +512,14 @@ target shall be supplied to cleanup so it can adapt formatting.
 **FR-11.10** [Should] `[derived]` If no Anthropic key is configured, dictation
 shall still work, delivering the verbatim transcript.
 
+**FR-11.11** [Must] `[user]` When `SwissSpelling` is on (default), the delivered
+text shall contain no `ß` or `ẞ`; each shall be written `ss` / `SS`. This applies
+to the raw-transcript fallback of FR-7.1 as well as to cleaned text.
+
+> Swiss Standard German, not German German. Enforced as a deterministic
+> replacement after cleanup, not as a prompt instruction, so a degraded delivery
+> obeys it too. *Tier:* host (`TextSanitizerTests`, `PipelineTests`).
+
 ## 12. Text injection
 
 **FR-12.1** [Must] `[user]` Text shall be delivered with `SendInput` using
@@ -741,6 +749,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `MinimumHoldMs` | int | `300` | FR-5.2 |
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
 | `Language` | enum | `Auto` | FR-10.3 |
+| `SwissSpelling` | bool | `true` | FR-11.11 |
 | `ScribeModelId` | string | `scribe_v2` | FR-10.2 |
 | `CleanupModel` | string | `claude-haiku-4-5` | FR-11.2 |
 | `ScribeTimeoutSeconds` | int | `15` | FR-10.6 |

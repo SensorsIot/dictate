@@ -173,6 +173,21 @@ tests:
       Verifies the prompt says it, not that the model obeys it. Obedience is
       the cleanup model's risk, and is checked at the desktop tier.
 
+  - id: H-16
+    name: Swiss spelling replaces every ß, in cleaned and fallback text, and can be turned off
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    verifies: [FR-11.11]
+    must_not: any ß or ẞ survives into delivered text while SwissSpelling is on
+    status: implemented
+    last_result: never_run
+    note: >
+      The fallback and off-switch cases are in PipelineTests.cs
+      (Swiss_spelling_applies_to_cleaned_and_fallback_text,
+      Swiss_spelling_can_be_turned_off).
+
   # ---- host tier: designed, not yet implemented ------------------------------
 
   - id: H-13
