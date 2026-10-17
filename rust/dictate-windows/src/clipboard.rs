@@ -2,9 +2,9 @@ use std::ptr;
 use std::thread;
 use std::time::Duration;
 
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::{GlobalFree, HWND};
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
-use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 
 use crate::win::wide;
 
