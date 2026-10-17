@@ -203,6 +203,19 @@ tests:
       FR ids here would mark requirements verified by code nobody runs. Once the
       Rust head ships, split this into per-requirement entries.
 
+  - id: R-02
+    name: Rust Windows head compiles and links on windows-latest
+    kind: build
+    scenario: standard
+    tier: ci
+    file: rust/dictate-windows/
+    verifies: []
+    status: implemented
+    last_result: pass        # run 39023710938, 2026-10-17, no compiler warnings
+    note: >
+      Compiles is all it shows. Nothing in the desktop tier (DT-*) has been run
+      against the Rust build, so it verifies no requirement yet.
+
   # ---- host tier: designed, not yet implemented ------------------------------
 
   - id: H-13

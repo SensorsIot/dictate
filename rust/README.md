@@ -6,7 +6,7 @@ A port of dictate from C#/.NET to Rust, done core first. The C# code under
 | Crate | Ports | State |
 |---|---|---|
 | `dictate-core` | `src/Dictate.Core` | Ported, with every host test from `tests/Dictate.Core.Tests` |
-| `dictate-windows` | `src/Dictate.Windows` | Not started |
+| `dictate-windows` | `src/Dictate.Windows` | Ported; builds in CI. **Not yet run on a desktop** |
 
 The rule from `CLAUDE.md` carries over: **`dictate-core` must not touch a
 Windows-only API.** CI compiles and tests it on `ubuntu-latest`.
@@ -22,6 +22,37 @@ Windows-only API.** CI compiles and tests it on `ubuntu-latest`.
   also covers FR-11.8 (temperature 0) at the host tier for the first time.
 - **Config enums** are read by name, case-insensitively, as before. Numeric
   enum values, which System.Text.Json also accepted, are not.
+
+## The Windows head
+
+Raw Win32 through `windows-sys`, on one UI thread with one message loop, the
+same shape as the WinForms app. Module for module:
+
+| C# | Rust |
+|---|---|
+| `HotkeyListener` | `hotkey.rs` — same reconciliation and symmetric suppression |
+| `AudioRecorder` (NAudio WaveInEvent) | `audio.rs` — winmm `waveIn` directly |
+| `TextInjector`, `WindowInspector`, `CredentialStore` | `injector.rs`, `window_inspector.rs`, `credentials.rs` |
+| `Overlay`, `TrayIcons` + `NotifyIcon`, `AuthForm` | `overlay.rs`, `tray.rs`, `auth.rs` |
+| `DictateApp`, `Program` | `app.rs`, `main.rs` |
+| `app.manifest` | `build.rs` (embed-manifest: asInvoker, per-monitor-v2 DPI, Common Controls v6) |
+
+Differences worth knowing before testing:
+
+- **Capture threads own their device.** Each open microphone belongs to one
+  thread that opens it, feeds it, resets it and closes it. Nothing else touches
+  the handle, which removes the stop/dispose race the C# recorder had to work
+  around.
+- **The pipeline runs on a worker thread** and posts its result back, instead
+  of `async void` on the UI thread.
+- **Same credential targets** (`dictate:elevenlabs`, `dictate:anthropic`) and the
+  same `config.json`, so the two builds share keys and settings. Quit one before
+  starting the other — two hooks on one hotkey both fire.
+- **Process counters in the log** carry working set and handle count; the
+  thread count is gone.
+
+CI uploads the release build as the `dictate-rust-exe` artifact on every push
+to this branch.
 
 ## Running
 
