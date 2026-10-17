@@ -196,7 +196,7 @@ tests:
     file: rust/dictate-core/tests/
     verifies: []
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39021568271, 2026-10-17, 71 tests
     note: >
       Branch rust-port only. Evidence that the Rust core matches the C# one, not
       evidence for any requirement: the shipped binary is still C#, so crediting
