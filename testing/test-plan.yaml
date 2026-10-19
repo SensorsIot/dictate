@@ -621,7 +621,12 @@ tests:
     oracle: >
       the second process shows "dictate is already running", exits with code 0,
       and the log gains no second started line
-    status: designed
+    status: implemented
+    last_result: pass
+    evidence: >
+      2026-10-19, CI build of run 39230101905: second launch opened a
+      "dictate" message box; closed, it exited with code 0; one dictate process
+      remained and the log gained no started line.
 
   # ---- workflow: the acceptance gate -----------------------------------------
 
@@ -659,7 +664,7 @@ tests:
 #
 #   host      18 implemented (H-01..H-18), all passing
 #   ci         2 passing (C-01, C-02)
-#   desktop    DT-01 DT-02 DT-04 DT-16 DT-19 DT-20 DT-21 DT-22 DT-23 pass
+#   desktop    DT-01 DT-02 DT-04 DT-16 DT-19 DT-20 DT-21 DT-22 DT-23 DT-25 pass
 #             · DT-17 partial
 #             · the rest written as procedures, not yet run
 #   workflow   W-01 partial (step 8 outstanding)
