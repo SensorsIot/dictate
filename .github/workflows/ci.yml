@@ -1,7 +1,7 @@
 name: CI
 
-# The only place this project is compiled. There is no Rust toolchain in the
-# devcontainer (Harness §1), so a red build here is the first notification
+# The only place this project is compiled. There is no Rust toolchain on any
+# development machine (Harness §1), so a red build here is the first notification
 # that anything is wrong.
 
 on:

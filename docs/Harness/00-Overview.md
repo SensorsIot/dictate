@@ -13,7 +13,7 @@ design — what the system must do — is in the [FSD](../Functionality/FSD.md) 
 |---|---|---|
 | Rust, raw Win32 through `windows-sys` | C# / .NET · Python · Electron | The application is Win32 interop plus two HTTP calls. Rust does both with no runtime: one ~4 MB exe, about 22 MB in memory, nothing to install, and no SDK whose surface can drift under a CI-only build. Python is weakest exactly here — `ctypes` structs, hook wrappers, packagers that trip antivirus. `windows-sys` rather than the `windows` crate: plain C signatures, checkable against the Win32 documentation without a compiler. |
 | `dictate-core` + `dictate-windows` in one Cargo workspace | A single crate · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
-| Builds only in GitHub Actions | A toolchain in the devcontainer | Deliberate, with the round-trip cost accepted. See §1 — it shapes how you work here more than anything else. |
+| Builds only in GitHub Actions | A local toolchain | Deliberate, with the round-trip cost accepted. See §1 — it shapes how you work here more than anything else. |
 | winmm (`waveIn`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
 | One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. |
 | Messages posted to one window, state in a thread-local | Shared state behind locks | The hook, the capture threads and the pipeline worker never touch session state; they post to the main window and the work happens on the next pump. Anything that runs a modal loop — tray menu, key dialog, message box — is called with the state released, because it re-enters the window procedure. |
@@ -24,8 +24,7 @@ design — what the system must do — is in the [FSD](../Functionality/FSD.md) 
 
 ## 1. The constraint that shapes everything
 
-**There is no Rust toolchain in the devcontainer or on the development
-machine.** This is deliberate (see §0) and it has consequences
+**There is no Rust toolchain on any development machine.** This is deliberate (see §0) and it has consequences
 you will feel within ten minutes:
 
 - `cargo build`, `cargo test` and `cargo run` do not exist locally.

@@ -1,6 +1,10 @@
-# Claude Code state (credentials live here — never commit)
+# Assistant and agent files stay on the development machine
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude/
 .claude-data/
-.claude/settings.local.json
+.devcontainer/
 
 # Rust build output
 target/

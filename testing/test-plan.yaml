@@ -10,7 +10,7 @@
 # last_result: never_run | pass | fail   (+ run_id when evidence exists)
 #
 # A test that is `implemented` but `never_run` discharges nothing. There is no
-# Rust toolchain in the devcontainer (Harness §1), so the host tier only ever
+# Rust toolchain on any development machine (Harness §1), so the host tier only ever
 # executes in CI, and the desktop tier only ever on the Windows machine by hand.
 # Read `last_result`, not `status`.
 
