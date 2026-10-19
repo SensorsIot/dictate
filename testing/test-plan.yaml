@@ -539,7 +539,13 @@ tests:
       unelevated process. Note that only the injected flag is under test here —
       see DT-21 on why a synthetic press cannot stand in for a real hold.
     status: implemented
-    last_result: never_run
+    last_result: pass
+    evidence: >
+      2026-10-19, v0.2.0, keybd_event(0x5C) from an unelevated PowerShell:
+        IgnoreInjectedHotkey off:  recording.start  injected=True  lowerIL=False
+        IgnoreInjectedHotkey on:   hotkey.rejected  reason=injected  lowerIL=False,
+                                   no recording.start
+      The hotkey was not left down in either case.
 
   - id: DT-20
     name: The capture device is released after every press across a hundred cycles
@@ -554,11 +560,19 @@ tests:
       Tap the hotkey repeatedly for a minute, then read the consent-store key and
       grep the log for mic.close confirmed=False. Taps below MinimumHoldMs are
       fine and cheapest — the device still opens and closes on each one.
-    status: designed
-    last_result: never_run
-    note: >
-      2026-10-19: every mic.close in the log reports confirmed=True, including
-      three taps inside two seconds. Well short of the hundred cycles asked for.
+    status: implemented
+    last_result: pass
+    evidence: >
+      2026-10-19, v0.2.0: 150 injected taps 3.6 s apart, longer than the 3 s
+      linger, so each opened and closed a device, and each released before the
+      open had finished. 150 recording.start, 150 recording.discarded,
+      150 mic.close confirmed=True, no confirmed=False, no mic.openFailed, no
+      utterance sent. Handles 231 -> 285 over the first 100 (warm-up), then
+      282 -> 287 over the next 50; working set 19.5-19.7 MB.
+    gap: >
+      The consent-store half of the oracle could not be read: on this machine
+      Windows has no entry for this exe, and its only dictate entry was last
+      updated 2026-08-18 despite daily use since. The log oracle stands alone.
 
   - id: DT-23
     name: A hotkey held while dictate starts does not leave the key stuck down
@@ -577,7 +591,12 @@ tests:
       here — the test is about which half of the pair the hook swallows, not
       about hold duration.
     status: implemented
-    last_result: never_run
+    last_result: pass
+    evidence: >
+      2026-10-19, v0.2.0, SuppressHotkey on, hotkey 0x5C:
+        key down, dictate not running -> GetAsyncKeyState reports down: True
+        dictate started, key released  -> GetAsyncKeyState reports down: False
+      No recording.start for the held key.
 
   # ---- workflow: the acceptance gate -----------------------------------------
 
@@ -615,7 +634,8 @@ tests:
 #
 #   host      18 implemented (H-01..H-18), all passing
 #   ci         2 passing (C-01, C-02)
-#   desktop    DT-01 DT-02 DT-04 DT-16 DT-21 DT-22 pass · DT-17 partial
+#   desktop    DT-01 DT-02 DT-04 DT-16 DT-19 DT-20 DT-21 DT-22 DT-23 pass
+#             · DT-17 partial
 #             · the rest written as procedures, not yet run
 #   workflow   W-01 partial (step 8 outstanding)
 #
@@ -627,9 +647,10 @@ tests:
 # parsing, prompt construction, configuration — plus the fact that
 # dictate-core carries no Windows dependency. On the desktop: the hotkey and
 # delivery into a browser and two terminals, tap discard, the console
-# separator, and press latency after a long idle.
+# separator, press latency after a long idle, injected-hotkey handling, 150
+# clean device cycles, and a hotkey held across startup.
 #
 # Still NOT verified: the focus-change fallback (DT-03), elevated windows
-# (DT-14, DT-18), surrogate pairs, the recording cap, injected-hotkey handling,
-# a hundred device cycles, start-while-held, and the no-persistence audit
-# (FR-17.1) that nobody has yet looked for.
+# (DT-14, DT-18), surrogate pairs, the recording cap, a second press during
+# transcription, and the no-persistence audit (FR-17.1) that nobody has yet
+# looked for.
