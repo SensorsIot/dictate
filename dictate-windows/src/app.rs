@@ -38,7 +38,7 @@ use crate::win::{
     instance, message_box, wide, SendHwnd, WM_HOTKEY_DOWN, WM_HOTKEY_REJECTED, WM_HOTKEY_UP, WM_PIPELINE_DONE,
     WM_RECORDER_CLOSED, WM_RECORDER_FIRST_BUFFER, WM_RECORDER_LIMIT, WM_RECORDER_OPEN_FAILED, WM_TRAY,
 };
-use crate::{auth, clipboard, hotkey, injector, paths, window_inspector};
+use crate::{auth, autostart, clipboard, hotkey, injector, paths, window_inspector};
 
 /// How many delivered utterances stay recoverable. In memory only (FR-17.2).
 const RECENT_CAPACITY: usize = 5;
@@ -338,8 +338,20 @@ fn on_tray_menu(hwnd: HWND) {
     let inputs = audio::list_inputs();
     let selected = configured.as_deref().and_then(|wanted| audio::find_input(&inputs, wanted));
 
-    match tray::show_menu(hwnd, &recent, &inputs, selected) {
+    let autostart_on = autostart::is_enabled();
+
+    match tray::show_menu(hwnd, &recent, &inputs, selected, autostart_on) {
         MenuChoice::Nothing => {}
+        MenuChoice::ToggleAutostart => {
+            let wanted = !autostart_on;
+            let result = autostart::set_enabled(wanted);
+            with_app(|app| {
+                app.log.event("autostart", &[field("enabled", wanted), field("ok", result.is_ok())]);
+                if let Err(error) = &result {
+                    app.tray.notify("Start with Windows", error);
+                }
+            });
+        }
         MenuChoice::Microphone(choice) => {
             let name = choice.and_then(|index| inputs.get(index).cloned());
             with_app(|app| app.select_microphone(name));

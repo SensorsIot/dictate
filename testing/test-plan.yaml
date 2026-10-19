@@ -593,6 +593,36 @@ tests:
         dictate started, key released  -> GetAsyncKeyState reports down: False
       No recording.start for the held key.
 
+  - id: DT-24
+    name: Start with Windows registers, survives a login, and unregisters
+    kind: atomic
+    scenario: standard
+    tier: desktop
+    verifies: [FR-16.3]
+    must_not: the check mark disagreeing with what starts at login
+    oracle: >
+      HKCU\Software\Microsoft\Windows\CurrentVersion\Run has a "dictate"
+      value with the exe's quoted path exactly while the box is ticked, and
+      dictate is running after the next login
+    steps: >
+      With no Startup-folder shortcut: tick the box, read the Run value, log
+      out and in, confirm dictate runs, untick, confirm the value is gone.
+      With a dictate shortcut in shell:startup: the box shows ticked; ticking
+      adds no Run value; unticking removes the shortcut.
+    status: designed
+
+  - id: DT-25
+    name: A second launch reports dictate is running and exits
+    kind: atomic
+    scenario: negative
+    tier: desktop
+    verifies: [FR-5.4]
+    must_not: two dictate processes holding a hook
+    oracle: >
+      the second process shows "dictate is already running", exits with code 0,
+      and the log gains no second started line
+    status: designed
+
   # ---- workflow: the acceptance gate -----------------------------------------
 
   - id: W-01

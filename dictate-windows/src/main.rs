@@ -9,6 +9,8 @@ mod audio;
 #[cfg(windows)]
 mod auth;
 #[cfg(windows)]
+mod autostart;
+#[cfg(windows)]
 mod clipboard;
 #[cfg(windows)]
 mod credentials;
@@ -42,20 +44,37 @@ fn main() {
 
 #[cfg(windows)]
 fn start() -> i32 {
-    use std::ptr::null_mut;
+    use std::ptr::{null, null_mut};
     use std::time::Duration;
 
     use dictate_core::{
         Cleaner, DiagnosticLog, DictateConfig, DictationPipeline, HaikuCleaner, PassthroughCleaner, ScribeTranscriber,
     };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_ICONWARNING};
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING};
 
-    use crate::win::message_box;
+    use crate::win::{message_box, wide};
 
     let fatal = |message: &str| message_box(null_mut(), message, MB_ICONERROR);
 
     if std::env::args().skip(1).any(|a| a == "--auth" || a == "-a") {
         return if auth::prompt() { 0 } else { 1 };
+    }
+
+    // FR-5.4: one dictate per user session. Two would both react to the
+    // hotkey, and once dictate can register itself at login a leftover
+    // Startup-folder shortcut is enough to start a second. The handle is held
+    // until the process exits; Windows releases it then.
+    let instance_name = wide("Local\\dictate.single-instance");
+    let _instance = unsafe { CreateMutexW(null(), 0, instance_name.as_ptr()) };
+    if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+        message_box(
+            null_mut(),
+            "dictate is already running. Look for its icon in the notification area.",
+            MB_ICONINFORMATION,
+        );
+        return 0;
     }
 
     let config_file = paths::config_file();

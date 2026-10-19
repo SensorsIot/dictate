@@ -32,8 +32,8 @@ Nothing is saved. No audio file, no transcript, no history on disk.
    **Anthropic** key (cleanup). They are written to Windows Credential Manager,
    encrypted under your Windows account. They are never written to a file.
 
-4. To start dictate at login, put a shortcut to it in the folder that opens when
-   you run `shell:startup`.
+4. To start dictate at login, right-click its tray icon and tick **Start with
+   Windows**. It is off until you do. Untick it to stop.
 
 **Do not run dictate as administrator.** It will appear to work and then
 silently fail to type into ordinary applications — Windows does not let an

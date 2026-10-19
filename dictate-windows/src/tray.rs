@@ -24,6 +24,7 @@ const ICON_ID: u32 = 1;
 const ID_OPEN_CONFIG: usize = 10;
 const ID_REAUTH: usize = 11;
 const ID_QUIT: usize = 12;
+const ID_AUTOSTART: usize = 13;
 const ID_RECENT_BASE: usize = 100;
 const ID_MIC_DEFAULT: usize = 200;
 const ID_MIC_BASE: usize = 201;
@@ -33,6 +34,7 @@ pub enum MenuChoice {
     Recent(usize),
     /// None: the Windows default input. Some: an index into the inputs shown.
     Microphone(Option<usize>),
+    ToggleAutostart,
     OpenConfigFolder,
     ReEnterKeys,
     Quit,
@@ -119,8 +121,14 @@ impl Drop for Tray {
 /// Shows the context menu at the cursor and returns what was picked. Runs a
 /// modal loop, so the caller must not be holding application state.
 /// `inputs` are the microphones to offer, `selected` the one in use (None for
-/// the Windows default).
-pub fn show_menu(hwnd: HWND, recent: &[String], inputs: &[String], selected: Option<usize>) -> MenuChoice {
+/// the Windows default); `autostart` checks "Start with Windows".
+pub fn show_menu(
+    hwnd: HWND,
+    recent: &[String],
+    inputs: &[String],
+    selected: Option<usize>,
+    autostart: bool,
+) -> MenuChoice {
     unsafe {
         let menu = CreatePopupMenu();
         let recent_menu = CreatePopupMenu();
@@ -145,6 +153,9 @@ pub fn show_menu(hwnd: HWND, recent: &[String], inputs: &[String], selected: Opt
         }
         let microphone_label = wide("Microphone");
         AppendMenuW(menu, MF_POPUP, microphone_menu as usize, microphone_label.as_ptr());
+
+        let autostart_label = wide("Start with Windows");
+        AppendMenuW(menu, MF_STRING | checked(autostart), ID_AUTOSTART, autostart_label.as_ptr());
 
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
         let open_config = wide("Open config folder");
@@ -180,6 +191,7 @@ pub fn show_menu(hwnd: HWND, recent: &[String], inputs: &[String], selected: Opt
             ID_OPEN_CONFIG => MenuChoice::OpenConfigFolder,
             ID_REAUTH => MenuChoice::ReEnterKeys,
             ID_QUIT => MenuChoice::Quit,
+            ID_AUTOSTART => MenuChoice::ToggleAutostart,
             ID_MIC_DEFAULT => MenuChoice::Microphone(None),
             id if id >= ID_MIC_BASE => MenuChoice::Microphone(Some(id - ID_MIC_BASE)),
             id if id >= ID_RECENT_BASE => MenuChoice::Recent(id - ID_RECENT_BASE),

@@ -63,8 +63,8 @@ Most of dictate is not the happy path.
 
    You need an **ElevenLabs** key. An **Anthropic** key is optional — without it
    you get dictation without cleanup.
-3. Run it. It lives in the tray. To start it at login, put a shortcut in
-   `shell:startup`.
+3. Run it. It lives in the tray. To start it at login, right-click the tray
+   icon and tick **Start with Windows**.
 
 **Don't run it as administrator.** It will appear to work and then silently fail
 to type into ordinary applications — Windows does not let an elevated process

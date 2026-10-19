@@ -222,6 +222,14 @@ be ignored.
 > new capture starts; state unchanged. *Must not:* two concurrent captures; audio
 > from two utterances concatenated. *Tier:* desktop. *Evidence:* screen recording.
 
+**FR-5.4** [Must] `[derived]` At most one instance shall run per user session.
+A second launch shall say that dictate is already running and exit without
+installing a hook.
+
+> Two instances would both react to the hotkey: two recordings, the text typed
+> twice. With FR-16.3 a leftover Startup-folder shortcut is enough to start a
+> second. `--auth` is exempt; it installs nothing. *Tier:* desktop.
+
 **FR-5.2** [Must] `[user]` A press held for less than `MinimumHoldMs`
 (default 300 ms) shall be discarded without transcription and without sound.
 
@@ -650,6 +658,21 @@ error, not a silent fallback to defaults.
 
 > A typo that silently reverts every setting looks exactly like the settings
 > never having applied.
+
+**FR-16.3** [Must] `[user]` The tray menu shall offer **Start with Windows**,
+off by default. Ticking it shall make dictate start, unelevated, at the
+current user's next login; unticking it shall stop that. The check mark shall
+reflect every route that starts dictate at login — its own registration and a
+dictate shortcut in the user's Startup folder — and a "Disabled" set in Task
+Manager.
+
+> Off by default by the user's decision: a program should not add itself to
+> startup unasked. Per-user registration needs no elevation, which matters
+> because an elevated dictate cannot type into ordinary windows. Ticking it
+> when a Startup-folder shortcut already starts dictate adds nothing, so it
+> never starts twice; unticking removes both. Ticking it again after moving the
+> exe repairs the path. *Must not:* the check mark showing on while nothing
+> starts dictate, or off while something does. *Tier:* desktop.
 
 ## 17. Retention
 
