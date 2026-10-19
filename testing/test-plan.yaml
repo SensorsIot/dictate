@@ -213,8 +213,25 @@ tests:
     status: implemented
     last_result: pass        # run 39023710938, 2026-10-17, no compiler warnings
     note: >
-      Compiles is all it shows. Nothing in the desktop tier (DT-*) has been run
-      against the Rust build, so it verifies no requirement yet.
+      Compiles is all this entry shows. Desktop checks run by hand against the
+      Rust build are listed below, kept apart from the DT-* last_result fields,
+      which record the C# build that ships.
+    desktop_runs:
+      - date: 2026-10-19
+        build: rust-port 594ea9f plus the overlay fix
+        first_attempt: >
+          Crashed ~1 s after start in user32!DrawTextExWorker, called from the
+          overlay's WM_PAINT with an empty (dangling) text buffer. Fixed by not
+          drawing until a state has been shown.
+        pass:
+          - DT-01   # Edge and Windows Terminal, press and release drive the session
+          - DT-04   # Windows Terminal classified console=True; one line, nothing ran
+          - DT-21   # 3.9 s suppressed hold logged as one session
+        observed: >
+          Right Windows did not open the Start menu; the overlay appeared.
+          Three utterances: working set flat at 22 MB, handles 316 -> 302.
+          Press-to-capture 89-93 ms, first buffer 71-72 ms, as the C# build.
+        not_yet_run: [DT-02, DT-03, DT-08, DT-13, DT-14, DT-17, DT-18, DT-20, DT-23]
 
   # ---- host tier: designed, not yet implemented ------------------------------
 
