@@ -615,7 +615,13 @@ tests:
       out and in, confirm dictate runs, untick, confirm the value is gone.
       With a dictate shortcut in shell:startup: the box shows ticked; ticking
       adds no Run value; unticking removes the shortcut.
-    status: designed
+    status: implemented
+    last_result: partial
+    evidence: >
+      2026-10-19, CI build of run 39255922791, by the user: with a dictate
+      shortcut in shell:startup the box shows ticked. Toggling not yet
+      exercised: the log holds no autostart event, the shortcut is unchanged
+      and there is no Run value.
 
   - id: DT-25
     name: A second launch reports dictate is running and exits
