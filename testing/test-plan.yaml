@@ -471,10 +471,16 @@ tests:
       then mic.close confirmed=True, and the microphone indicator in the
       taskbar goes out
     status: implemented
-    last_result: never_run
+    last_result: pass
+    evidence: >
+      2026-10-19, CI build of run 39230101905, by the user from Windows
+      Terminal into an administrator PowerShell, twice: recording.stop
+      reason=Reconciled both times, then mic.close confirmed=True. The second
+      carried speech and went to the clipboard with reason=focus-changed
+      (FR-6.2); the first was too short to recognise.
     note: >
       Expect the Start menu to open on the release: suppression cannot apply to
-      input the hook never sees.
+      input the hook never sees. It did, both times.
     steps: >
       Needs the key-up to be genuinely lost, which means UIPI rather than a
       trick: open a window running as administrator, hold the hotkey, click into
