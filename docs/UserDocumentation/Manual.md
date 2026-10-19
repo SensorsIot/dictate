@@ -175,6 +175,7 @@ Turn the diagnostic log on first — it answers most of these directly.
 | Symptom | Cause and fix |
 |---|---|
 | Nothing typed, no error | The focused window is running as administrator. Windows will not let an unelevated process send it input, and running dictate elevated breaks every *other* application instead. |
+| The hotkey opens the Start menu and nothing is recorded | The same cause, one step earlier: Windows does not show dictate keys pressed in an administrator window, so the key reaches Windows instead. Dictate in an ordinary window and paste. |
 | Text lands in the wrong application | The wrong window had focus when you pressed the key. Press Ctrl+V — every utterance is on the clipboard too. |
 | Text goes to the clipboard every time | You are switching windows before the text is ready. That is the safety net working, not a fault. |
 | The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` — it says how long the microphone took to deliver anything. A large value means the interface was slow to spin its capture stream up; set `"KeepMicrophoneOpen": true`, at the cost of the microphone indicator staying lit. |
