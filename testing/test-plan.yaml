@@ -650,7 +650,12 @@ tests:
       the Start button while the administrator window has focus — Start must
       stay open both times and the log gain no start.closed.
     status: implemented
-    last_result: never_run
+    last_result: pass
+    evidence: >
+      2026-10-19, CI build of run 39255922791, by the user: one start.closed
+      ok=True at 15:03:00, no retry needed, Start gone and the notification
+      shown. The user reported the steps working; the log holds no other
+      start.closed, so nothing else was closed.
 
   # ---- workflow: the acceptance gate -----------------------------------------
 
