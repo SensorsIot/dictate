@@ -1,7 +1,7 @@
 # dictate — User Manual
 
-> Everything below describes behaviour that has been run on a real machine, not
-> intended behaviour.
+> Everything below describes actual behaviour on a real machine, not intended
+> behaviour.
 
 The OPERATE plane. One manual with chapters — add a chapter, never a sibling
 document.
@@ -60,7 +60,7 @@ Two rules worth knowing:
   because a newline typed into a shell is the Enter key and would run the
   command.
 
-The hotkey is swallowed, so the right Windows key no longer opens the Start menu
+The hotkey is swallowed, so the right Windows key does not open the Start menu
 or acts as a modifier. The left Windows key is untouched.
 
 ## 4. Configuration

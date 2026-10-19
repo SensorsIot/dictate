@@ -4,14 +4,12 @@
 |---|---|
 | **Status** | Released — v0.2.0. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
 | **Version** | 0.2.0 |
-| **Last updated** | 2026-10-19 |
-| **Derives from** | A design interview on 2026-08-16; the choices it settled are in §1.4 |
 | **Complexity** | Medium |
 | **Plane** | WHAT — externally observable behaviour only. Build and code rules live in [`../Harness/`](../Harness/00-Overview.md); operating instructions in [`../UserDocumentation/Manual.md`](../UserDocumentation/Manual.md). |
 
-Provenance tags: `[user]` decided by the user · `[derived]` follows necessarily
-from a `[user]` decision · `[assumed]` inferred by the assistant and **not yet
-confirmed** · `[code]` read back from the implementation.
+Provenance tags: `[user]` a stated requirement · `[derived]` follows necessarily
+from a stated requirement · `[assumed]` inferred, **not yet confirmed** ·
+`[code]` read back from the implementation.
 
 ---
 
@@ -50,31 +48,30 @@ This is that run, and it is the acceptance gate for workflow test W-01.
 | 7 | — | The sentence appears at the caret: punctuated, no fillers, in German, vocabulary term spelled per the configured list |
 | 8 | User checks the disk | No audio file, no transcript file, anywhere |
 
-### 1.4 What was chosen, and what was rejected
+### 1.4 Design basis
 
 Rationale lives with the requirement it explains, so that changing the
 requirement forces you past the reason for it. This table covers only the
-product-level choices that shaped the whole system; implementation choices —
-language, project split, build strategy, audio stack — are in
-[`../Harness/00-Overview.md`](../Harness/00-Overview.md), because they are HOW.
+product-level design that shapes the whole system; implementation design —
+language, project split, build strategy, audio stack — is in
+[`../Harness/00-Overview.md`](../Harness/00-Overview.md), because it is HOW.
 
-| Choice | Rejected | Why |
+| Uses | Not used | Why |
 |---|---|---|
 | Windows 11 client | Linux desktop · cross-platform · a service on the dev VM | The hotkey, the microphone and the target window all live there. A container on a headless VM has none of the three. |
-| ElevenLabs Scribe | Local faster-whisper · Groq · Deepgram | Chosen by the user. The dev VM has 4 vCPUs and no GPU, so a local model there was never viable. |
+| ElevenLabs Scribe | Local faster-whisper · Groq · Deepgram | A stated requirement (FR-10.1). The dev VM has 4 vCPUs and no GPU, so a local model there is not viable. |
 | Claude Haiku 4.5 for cleanup | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. |
 | Push-to-talk, hold | Toggle · toggle with silence auto-stop | Key release is an unambiguous end-of-utterance signal. No VAD, and no way to leave the microphone hot by accident. |
 | Synthetic typing (`SendInput`) | Clipboard paste with restore · clipboard only | Works in terminals and over RDP without a per-application paste chord, and does not clobber the clipboard as a side effect of delivery. |
 | German + English, auto with a pin | English only · full auto with no override | The user's work mixes both in one sentence, and auto-detection misfires on short utterances. |
-| Hygiene + vocabulary + app context | Hygiene only · a full rewriting assistant | Voice commands were rejected outright: the model would have to separate content from instruction, and would eventually eat a wanted sentence. |
-| Nothing persisted to disk | Transcript history · an audio ring buffer | The user's call, against a recommendation to keep transcripts for tuning. FR-17.2's in-memory buffer is the compromise that keeps "nothing is lost" honest. |
+| Hygiene + vocabulary + app context | Hygiene only · a full rewriting assistant | There are no voice commands: the model would have to separate content from instruction, and would eventually eat a wanted sentence. |
+| Nothing persisted to disk | Transcript history · an audio ring buffer | No dictated content at rest, not even transcripts for tuning (FR-17.1). FR-17.2's in-memory buffer is what keeps "nothing is lost" honest. |
 | Keys in Windows Credential Manager | Infisical CLI · a plaintext `.env` · a proxy service | DPAPI-encrypted at rest, works off the home LAN, no dependency on another machine being up. |
 | Pin the target window, fall back to the clipboard | Best-effort typing into whatever has focus | Typing into whatever happens to be in front is how dictation lands a sentence in the wrong chat, or at a shell prompt. |
 | Right Windows | Right Ctrl · Right Alt · CapsLock · a mouse button | The hotkey is held for seconds, so it must mean nothing on its own. Right Ctrl is browser zoom; Right Alt is AltGr on a Swiss layout and binding it would cost `@ { } [ ] \`. |
 
-Six further choices were made only after running it on real hardware, and each
-overturned something that had seemed reasonable on paper. They are recorded at
-the requirement they changed: FR-14.3 (no audio cues at all), FR-14.2 (a fixed
+Further product-level constraints are recorded at the requirement they shape:
+FR-14.3 (no audio cues at all), FR-14.2 (a fixed
 corner, not the cursor), FR-14.5 (no notification on success), FR-6.7 (always
 copy to the clipboard), and in the Harness for the diagnostic log.
 
@@ -175,14 +172,14 @@ exist.
 | R-03 | Cleanup rewrites meaning or translates | The user sends something they did not say | FR-11.4 forbids translating and FR-11.5 forbids answering; cleanup never sees a request to answer |
 | R-04 | Audio of everything spoken accumulates on disk | A laptop theft becomes a recording leak | FR-17.1: no audio or transcript is ever written |
 | R-05 | An API key is readable on the machine | Account compromise | FR-15.1: DPAPI via Credential Manager, never a file |
-| R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.4 boundary. Per-app chunking (FR-12.3) is the escape hatch |
-| R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted by the user; see the Harness §0. Host tests keep the blast radius small |
+| R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.5 boundary. Per-app chunking (FR-12.3) is the escape hatch |
+| R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted; see the Harness §0. Host tests keep the blast radius small |
 | R-08 | Scribe or Anthropic changes a model identifier | Every utterance fails | FR-10.2 and FR-11.2 make both configurable; FR-7.4 surfaces the API's own error text |
 
 ### 4.1 Explicitly out of scope
 
-- Voice commands ("delete that", "make it formal") — rejected; see §1.4.
-- Streaming transcription — deferred; see the Harness §0.
+- Voice commands ("delete that", "make it formal") — see §1.4.
+- Streaming transcription — see the Harness §0.
 - Any platform other than Windows 11 x64.
 - Multi-user or shared-machine operation.
 - Persisting transcripts, audio, or usage history — see §1.4.
@@ -381,8 +378,8 @@ ignorable by configuration (`IgnoreInjectedHotkey`, default off).
 > keystrokes by signature (FR-8.3) but not anyone else's, and for a push-to-talk
 > an unasked-for press means an open microphone. Rejecting synthetic input cannot
 > be the default, because remote-desktop tools deliver the user's genuine
-> keystrokes the same way — so the origin is always recorded and the choice is
-> left open. If injected presses show up in the log, the default flips.
+> keystrokes the same way — so the origin is always recorded and rejecting it
+> is a setting.
 
 > dictate can rule out its own synthetic keystrokes by signature (FR-8.3) but not
 > anyone else's. Mouse software, CAD input devices and macro tools all map buttons
@@ -434,11 +431,10 @@ shall close it and say why it cannot hear the hotkey there.
 
 > The hook never sees a press in an elevated window, so the key is not
 > suppressed and its release opens Start. The key itself is invisible to
-> dictate there (the async key state reads up throughout, measured
-> 2026-10-19); only the Start menu arriving is visible. That cannot tell the
-> two Windows keys apart, so the other one, pressed on purpose in an elevated
-> window, is closed as well — the user's decision, preferred over leaving Start
-> open beside the message. A click on the Start button is exempt: the cursor is
+> dictate there (the async key state reads up throughout); only the Start menu
+> arriving is visible. That cannot tell the two Windows keys apart, so the other
+> one, pressed on purpose in an elevated window, is closed as well rather than
+> leaving Start open beside the message. A click on the Start button is exempt: the cursor is
 > on the taskbar. *Must not:* closing a Start menu opened from an ordinary
 > window. *Tier:* desktop.
 
@@ -467,7 +463,7 @@ match, from the Windows default input. The device in use shall be logged.
 > and writes only `InputDevice` into config.json, leaving the user's other
 > keys untouched.
 >
-> Lets dictation use one microphone (the user's Logitech BRIO) without making
+> Lets dictation use one microphone (a webcam's, say) without making
 > it the default for every other application. Resolved on every open, so a
 > device plugged in after startup is used from the next press.
 
@@ -476,10 +472,9 @@ shall stay open for 3 s after a session ends and then close, unless a new
 session has started in that time, which reuses it. Delivery of the ended
 session's text shall not wait for the close.
 
-> Chosen 2026-10-19 after a desktop run: a press shortly after
-> a tap waited for the previous device to finish closing (about 3 s for a USB
-> interface closed mid-startup) and lost its first second of speech
-> (`mic.firstBuffer after=1070ms`). The cost is the Windows microphone
+> Without the linger, a press shortly after a tap waits for the previous device
+> to finish closing (about 3 s for a USB interface closed mid-startup) and loses
+> its first second of speech. The cost is the Windows microphone
 > indicator staying lit 3 s longer after each dictation. *Must not:* text
 > delivered later than without the linger; the device still open 5 s after the
 > last session. *Tier:* desktop.
@@ -548,12 +543,12 @@ continue the transcript.
 transcript plus 20 characters shall be treated as a cleanup failure under
 FR-7.1: the raw transcript is delivered and the session marked degraded.
 
-> FR-11.5 enforced structurally, because a prompt cannot guarantee it. On
-> 2026-10-19 a one-second fragment came back as "I have no transcript to clean.
-> Please provide the speech-to-text output you'd like me to process." and was
-> typed into a terminal. Cleanup only removes and punctuates, so real output
-> never approaches the bound. *Must not:* a reply to the user delivered as
-> dictated text. *Tier:* host (`PipelineTests`). Since 0.2.0.
+> FR-11.5 enforced structurally, because a prompt cannot guarantee it: given a
+> very short fragment, the model can reply to the user instead ("I have no
+> transcript to clean. Please provide the speech-to-text output you'd like me to
+> process."), and that reply would otherwise be typed. Cleanup only removes and
+> punctuates, so real output never approaches the bound. *Must not:* a reply to
+> the user delivered as dictated text. *Tier:* host (`PipelineTests`).
 
 **FR-11.6** [Must] `[user]` Terms listed in `Vocabulary` shall be spelled as
 configured.
@@ -625,19 +620,18 @@ configuration.
 **FR-14.5** [Must] `[user]` Notifications shall be raised only when the user
 needs to act or something went wrong.
 
-> Per-utterance status popups were tried during development and removed: a
-> balloon after every successful dictation is noise, and noise trains people to
+> There are no per-utterance status popups: a balloon after every successful dictation is noise, and noise trains people to
 > ignore the balloons that matter. Routine timings belong in the diagnostic log.
 
 **FR-14.3** [Won't] `[user]` dictate makes no sound.
 
 > The overlay and the tray icon carry the state, and audio cues cost more than
-> they were worth. Tones mean a second audio device, and an idle audio endpoint
-> takes seconds to spin back up: opening the output stream stalled capture while
-> it did, so the first dictation after a pause waited seconds for its own
+> they are worth. Tones mean a second audio device, and an idle audio endpoint
+> takes seconds to spin back up: opening an output stream stalls capture while
+> it does, so the first dictation after a pause would wait seconds for its own
 > microphone. Holding the device open instead makes dictate sit on the output
 > endpoint permanently, which interferes with everything else that uses it.
-> dictate now opens exactly one audio device, the microphone.
+> dictate opens exactly one audio device, the microphone.
 
 **FR-14.4** [Must] `[derived]` The overlay shall never take keyboard focus.
 
@@ -680,7 +674,7 @@ reflect every route that starts dictate at login — its own registration and a
 dictate shortcut in the user's Startup folder — and a "Disabled" set in Task
 Manager.
 
-> Off by default by the user's decision: a program should not add itself to
+> Off by default: a program should not add itself to
 > startup unasked. Per-user registration needs no elevation, which matters
 > because an elevated dictate cannot type into ordinary windows. Ticking it
 > when a Startup-folder shortcut already starts dictate adds nothing, so it
@@ -720,7 +714,7 @@ keys in memory has no defence, and claiming otherwise would be theatre.
 rest) between them mean a stolen profile yields neither the keys nor the history.
 
 **Accepted, not mitigated.** Utterance audio and text traverse two third-party
-services in cleartext-to-them form. That is inherent to the choice of Scribe and
+services in cleartext-to-them form. That is inherent to using Scribe and
 Haiku (§1.4). Anyone for
 whom that is unacceptable needs a local model, which is a different product.
 

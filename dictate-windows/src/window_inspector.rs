@@ -44,8 +44,7 @@ fn read_title(window: HWND) -> String {
 /// Whether the window belongs to a process above dictate's integrity level —
 /// in practice one running as administrator. Such a process refuses full query
 /// access to an unelevated one; limited access still works, so a refusal of
-/// the full kind is the signal (checked on this machine against an
-/// administrator PowerShell).
+/// the full kind is the signal (an administrator PowerShell refuses it).
 pub fn is_elevated(window: HWND) -> bool {
     let mut pid = 0u32;
 

@@ -106,7 +106,7 @@ rest.
 
 | | |
 |---|---|
-| [What it must do](docs/Functionality/FSD.md) | Functional specification, state model, verification contracts, and why each choice was made |
+| [What it must do](docs/Functionality/FSD.md) | Functional specification, state model, verification contracts, and the reasons behind the design |
 | [How it is built](docs/Harness/00-Overview.md) | Build rules, seams, testing standard |
 | [How to run it](docs/UserDocumentation/Manual.md) | Install, use, configure, recover |
 | [What is verified](testing/test-plan.yaml) | Every test, its tier, and what it last produced |
@@ -114,7 +114,7 @@ rest.
 ## Status
 
 Working and in daily use. 75 automated tests, all passing; the pipeline,
-latency, memory behaviour and delivery paths have been measured on real
+latency, memory behaviour and delivery paths are measured on real
 hardware.
 
 Honest about what that does *not* cover: the desktop-tier tests are run by hand,

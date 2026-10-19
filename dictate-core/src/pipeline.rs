@@ -10,8 +10,8 @@ use crate::wav;
 
 /// Cleanup removes fillers and adds punctuation; it never makes an utterance
 /// much longer. Output beyond twice the input plus a little slack is not a
-/// cleanup of it — in practice it is the model talking to the user, which on
-/// the first desktop run happened for a one-second fragment (FR-11.12).
+/// cleanup of it — in practice it is the model talking to the user, which
+/// happens for a one-second fragment (FR-11.12).
 pub fn is_plausible_cleanup(raw: &str, cleaned: &str) -> bool {
     cleaned.chars().count() <= raw.chars().count() * 2 + 20
 }

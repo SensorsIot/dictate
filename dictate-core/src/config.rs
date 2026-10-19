@@ -39,7 +39,7 @@ pub struct DictateConfig {
     pub input_device: Option<String>,
     pub append_space_after_insert: bool,
     pub always_copy_to_clipboard: bool,
-    /// Never the dictated text — see `DiagnosticLog`. Off: the user chose zero persistence.
+    /// Never the dictated text — see `DiagnosticLog`. Off by default — FR-17.1: nothing persists.
     pub enable_diagnostic_log: bool,
     pub language: LanguageMode,
     /// Write German the Swiss way: ss, never ß (FR-11.11).

@@ -15,9 +15,9 @@
 //! **The UI thread never waits for a device.** It also runs the keyboard hook,
 //! and Windows skips a hook that does not answer within LowLevelHooksTimeout.
 //! Opening a device can take a second when the previous one is still closing —
-//! a quick second press after a tap — and while the UI thread waited, the
-//! hotkey's key-up went straight to the system: the Start menu opened, and the
-//! session ended by reconciliation with no audio. So `start` only marks the
+//! a quick second press after a tap — and if the UI thread waits, the
+//! hotkey's key-up goes straight to the system: the Start menu opens, and the
+//! session ends by reconciliation with no audio. So `start` only marks the
 //! session; the device is opened on a background thread and kept only if the
 //! session that asked for it is still running.
 //!
@@ -93,8 +93,8 @@ pub fn find_input(inputs: &[String], wanted: &str) -> Option<usize> {
 
 /// How long a device stays open after a session ends (FR-9.5). A press within
 /// this window reuses it and captures at once; without it, a quick second
-/// press waited for the previous device to finish closing — about three
-/// seconds on a USB interface closed mid-startup — and lost its first second
+/// press waits for the previous device to finish closing — about three
+/// seconds on a USB interface closed mid-startup — and loses its first second
 /// of speech. Delivery never waits for this: the audio is handed over on
 /// release, and the device closes in the background.
 const LINGER: Duration = Duration::from_secs(3);

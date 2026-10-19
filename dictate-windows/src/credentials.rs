@@ -1,5 +1,5 @@
 //! API keys in Windows Credential Manager, DPAPI-encrypted under the logged-in
-//! user. Chosen over a .env file so there is no plaintext key sitting on a
+//! user. Not a .env file, so there is no plaintext key sitting on a
 //! daily-driver machine. The target names are part of the stored data:
 //! changing them orphans every key a user has already saved.
 

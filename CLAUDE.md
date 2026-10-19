@@ -74,13 +74,16 @@ Implemented ≠ verified. Read `last_result`, not `status`.
   CI-only builds a promoted warning costs a round trip to discover.
 - Comments state constraints the code cannot show (why `dwExtraInfo` is stamped,
   why the device opens off the UI thread). They don't narrate the next line.
+- Everything about dictate lives in this repository — behaviour in the FSD,
+  documentation rules in `docs/00-Overview.md`. Assistant memory holds only
+  pointers to them.
 
 ## Don't
 
 - Don't add a `.ico` — tray icons are drawn at runtime in `tray.rs`.
 - Don't make the app elevated. An elevated hook cannot see input bound for
   unelevated windows, so dictation would stop working in ordinary apps.
-- Don't write audio or transcripts to disk. FR-17.1 is a user decision, not an
-  oversight, and the in-memory recent list is the agreed compromise.
+- Don't write audio or transcripts to disk. FR-17.1 requires that nothing
+  persists; the in-memory recent list (FR-17.2) is how lost text is recovered.
 - Don't special-case one PC's devices (the DAX inputs, the BRIO) in code. Device
   choice is configuration.

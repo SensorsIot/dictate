@@ -77,7 +77,7 @@ fn happy_path_delivers_the_cleaned_text() {
 
 #[test]
 fn cleanup_failure_falls_back_to_the_raw_transcript() {
-    // The agreed degradation: a scruffy sentence beats a lost one.
+    // FR-7.1: a scruffy sentence beats a lost one.
     let pipeline = build(StubTranscriber::ok("um so the thing is"), StubCleaner::failing("503"));
 
     let result = pipeline.process(&some_audio(), &TargetContext::unknown());
@@ -99,8 +99,8 @@ fn cleanup_returning_nothing_is_treated_as_a_failure_not_a_deletion() {
 
 #[test]
 fn a_reply_instead_of_a_cleanup_is_never_delivered() {
-    // What the first desktop run actually typed into a
-    // terminal, for a one-second fragment.
+    // What the model replies, instead of a cleanup, for a
+    // one-second fragment.
     let pipeline = build(
         StubTranscriber::ok("Okay."),
         StubCleaner::ok("I have no transcript to clean. Please provide the speech-to-text output you'd like me to process."),

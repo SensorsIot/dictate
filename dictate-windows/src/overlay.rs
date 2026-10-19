@@ -213,8 +213,8 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, message: u32, wparam: WPARAM,
 
                 // Windows paints the layered window once after creation, before
                 // any state has been shown. An empty Vec's pointer is dangling,
-                // and DrawTextW dereferences it even for a length of zero —
-                // which is how the first desktop run crashed.
+                // and DrawTextW dereferences it even for a length of zero,
+                // which crashes.
                 if view.text.is_empty() {
                     return;
                 }

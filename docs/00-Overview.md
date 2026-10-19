@@ -24,8 +24,8 @@ Ask in order, first yes wins:
 2. Constrains how code is written or verified? → **Harness**
 3. Tells a human how to run or recover it? → **UserDocumentation**
 4. About working with the assistant? → `CLAUDE.md`
-5. Why a decision was made? → the FSD §1.4 (product) or Harness §0 (implementation), beside the thing it explains
-6. What it used to do, or when it changed? → the git history. **The planes carry only what is true now** — no dates, no version narratives, no record of superseded behaviour
+5. Why does it work this way? → the FSD §1.4 Design basis (product) or Harness §0 (implementation), beside the thing it explains
+6. What it used to do, when it changed, or who decided it? → the git history. **The planes carry only what is true now**, in the present tense — no dates, no version narratives, no record of superseded behaviour or of who decided what. A reason is stated as a present constraint. Code comments follow the same rule. Test-plan evidence is the exception: it records results, so it keeps its dates and runs
 
 Two questions settle the hard cases: *could a black-box tester verify it?*
 (yes → WHAT) and *would it survive a rewrite in another language?* (no → HOW).

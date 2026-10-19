@@ -5,7 +5,7 @@
 //! fields, so there is no path by which utterance text can be passed in by
 //! accident. Where the size of an utterance matters, log its length.
 //!
-//! Off by default: the user chose zero persistence.
+//! Off by default — FR-17.1: nothing persists.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;

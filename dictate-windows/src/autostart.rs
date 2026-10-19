@@ -6,8 +6,7 @@
 //!
 //! Two other things also decide whether dictate starts at login, and the
 //! checkbox has to agree with both or it would show one thing and do another:
-//!   * a shortcut in the Startup folder, which is how it was set up by hand
-//!     before the checkbox existed;
+//!   * a shortcut in the Startup folder, placed there by hand;
 //!   * Task Manager's "Disabled" switch, kept under StartupApproved.
 
 use std::ffi::c_void;

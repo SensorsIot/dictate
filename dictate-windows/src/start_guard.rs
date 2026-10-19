@@ -5,8 +5,8 @@
 //! async key state reads up throughout. What is visible is the consequence —
 //! the Start menu taking the foreground straight from an elevated window — so
 //! that is what this watches for. It cannot tell which Windows key opened Start;
-//! the left one, pressed on purpose in an elevated window, is closed too. That
-//! trade is the user's decision.
+//! the left one, pressed on purpose in an elevated window, is closed too, rather
+//! than leaving Start open beside the message.
 //!
 //! A click on the Start button is told apart by the cursor sitting on the
 //! taskbar, which the mouse reaches through Explorer, not the elevated window.

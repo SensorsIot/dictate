@@ -6,26 +6,26 @@ instead.
 
 ## 0. Why it is built this way
 
-Implementation choices and what they replaced. Product-level choices — what the
-system must do — are in the [FSD](../Functionality/FSD.md) §1.4.
+Implementation design and the alternatives it does not use. Product-level
+design — what the system must do — is in the [FSD](../Functionality/FSD.md) §1.4.
 
-| Choice | Rejected | Why |
+| Uses | Not used | Why |
 |---|---|---|
 | Rust, raw Win32 through `windows-sys` | C# / .NET · Python · Electron | The application is Win32 interop plus two HTTP calls. Rust does both with no runtime: one ~4 MB exe, about 22 MB in memory, nothing to install, and no SDK whose surface can drift under a CI-only build. Python is weakest exactly here — `ctypes` structs, hook wrappers, packagers that trip antivirus. `windows-sys` rather than the `windows` crate: plain C signatures, checkable against the Win32 documentation without a compiler. |
 | `dictate-core` + `dictate-windows` in one Cargo workspace | A single crate · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
-| Builds only in GitHub Actions | A toolchain in the devcontainer | The user's explicit choice, with the round-trip cost stated and accepted. See §1 — it shapes how you work here more than anything else. |
+| Builds only in GitHub Actions | A toolchain in the devcontainer | Deliberate, with the round-trip cost accepted. See §1 — it shapes how you work here more than anything else. |
 | winmm (`waveIn`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
-| One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. Found on the first desktop run. |
+| One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. |
 | Messages posted to one window, state in a thread-local | Shared state behind locks | The hook, the capture threads and the pipeline worker never touch session state; they post to the main window and the work happens on the next pump. Anything that runs a modal loop — tray menu, key dialog, message box — is called with the state released, because it re-enters the window procedure. |
-| No audio cues | Synthesised tones | A second audio device cost more than the tones were worth: an idle output endpoint takes seconds to spin up, and opening it stalled capture. The overlay says the same thing instantly. |
-| An opt-in diagnostic log, metadata only | No log at all | Diagnosing a shipped binary from another machine meant reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. It records timings and counters, never dictated text, so FR-17.1 still holds. |
+| No audio cues | Synthesised tones | A second audio device costs more than the tones are worth: an idle output endpoint takes seconds to spin up, and opening it stalls capture. The overlay says the same thing instantly. |
+| An opt-in diagnostic log, metadata only | No log at all | Without it, diagnosing a shipped binary from another machine means reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. It records timings and counters, never dictated text, so FR-17.1 still holds. |
 | Plain HTTP for both APIs | The Anthropic SDK | There is no official Rust SDK, and two small JSON requests cost less to own than a client surface to track. The request body and response parsing are pure functions with host tests. |
-| Batch upload, streaming deferred | Streaming transcription from the start | Correctness first, then measure. `Transcriber` is the seam a streaming backend drops into without touching the pipeline. |
+| Batch upload | Streaming transcription | Correctness first, then measure. `Transcriber` is the seam a streaming backend drops into without touching the pipeline. |
 
 ## 1. The constraint that shapes everything
 
 **There is no Rust toolchain in the devcontainer or on the development
-machine.** This was the user's explicit choice (see §0) and it has consequences
+machine.** This is deliberate (see §0) and it has consequences
 you will feel within ten minutes:
 
 - `cargo build`, `cargo test` and `cargo run` do not exist locally.
@@ -88,8 +88,8 @@ external dependency and it gets a trait in the core first.
 the documentation says so rather than implying a CI job that does not exist. It
 needs a real keyboard hook, a real microphone and a real foreground window.
 
-When something fails on the desktop, the crash dialog says little. What found
-the first Rust crash: run the exe under a small debugger, catch the access
+When something fails on the desktop, the crash dialog says little. What finds a
+crash: run the exe under a small debugger, catch the access
 violation, and resolve the `user32.dll` frames against Microsoft's public
 symbol server. The diagnostic log (`EnableDiagnosticLog`) answers most other
 questions — `pressToStart`, `mic.firstBuffer`, `mic.close confirmed`.
