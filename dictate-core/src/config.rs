@@ -2,9 +2,9 @@
 //! Missing file means defaults; a broken file is a hard error, because silently
 //! falling back to defaults would look like the settings simply did not take.
 //!
-//! Reads the same files the C# build wrote: PascalCase keys matched
-//! case-insensitively, comments and trailing commas allowed, enum names in any
-//! case.
+//! Forgiving on purpose, because the file is edited by hand: keys match
+//! case-insensitively, comments and trailing commas are allowed, and enum
+//! values may be written in any case.
 
 use std::fs;
 use std::path::Path;
@@ -15,8 +15,8 @@ use serde_json::{Map, Number, Value};
 use crate::error::Error;
 use crate::model::{LanguageMode, OverlayPosition};
 
-/// Field order is the order `save` writes, kept identical to the C# class.
-/// Rationale for each default lives on `DictateConfig.cs` and FSD Appendix A.
+/// Field order is the order `save` writes. The rationale for each default is
+/// in FSD Appendix A and beside the requirement it serves.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct DictateConfig {

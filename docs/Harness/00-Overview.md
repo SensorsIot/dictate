@@ -11,11 +11,11 @@ system must do — are in the [FSD](../Functionality/FSD.md) §1.4.
 
 | Choice | Rejected | Why |
 |---|---|---|
-| Rust, raw Win32 through `windows-sys` | C# / .NET 9 (shipped until 0.1.21) · Python · Electron | The application is Win32 interop plus two HTTP calls. C# did that well and shipped first; the Rust port replaced it on 2026-10-19 after running side by side on the desktop. It ships one ~4 MB exe with no runtime, idles at about a quarter of the memory (22 MB against 94 MB), and has no SDK whose surface can drift under a CI-only build. `windows-sys` rather than the `windows` crate: plain C signatures, checkable against the Win32 documentation without a compiler. |
+| Rust, raw Win32 through `windows-sys` | C# / .NET · Python · Electron | The application is Win32 interop plus two HTTP calls. Rust does both with no runtime: one ~4 MB exe, about 22 MB in memory, nothing to install, and no SDK whose surface can drift under a CI-only build. Python is weakest exactly here — `ctypes` structs, hook wrappers, packagers that trip antivirus. `windows-sys` rather than the `windows` crate: plain C signatures, checkable against the Win32 documentation without a compiler. |
 | `dictate-core` + `dictate-windows` in one Cargo workspace | A single crate · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
 | Builds only in GitHub Actions | A toolchain in the devcontainer | The user's explicit choice, with the round-trip cost stated and accepted. See §1 — it shapes how you work here more than anything else. |
 | winmm (`waveIn`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
-| One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. Found on the first desktop run of the Rust build. |
+| One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. Found on the first desktop run. |
 | Messages posted to one window, state in a thread-local | Shared state behind locks | The hook, the capture threads and the pipeline worker never touch session state; they post to the main window and the work happens on the next pump. Anything that runs a modal loop — tray menu, key dialog, message box — is called with the state released, because it re-enters the window procedure. |
 | No audio cues | Synthesised tones | A second audio device cost more than the tones were worth: an idle output endpoint takes seconds to spin up, and opening it stalled capture. The overlay says the same thing instantly. |
 | An opt-in diagnostic log, metadata only | No log at all | Diagnosing a shipped binary from another machine meant reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. It records timings and counters, never dictated text, so FR-17.1 still holds. |
@@ -133,6 +133,10 @@ that reads finished while nothing is verified.
 
 ## 6. Release
 
-Tag `v*` on `main`. The workflow stamps the tag's version into
-`dictate-windows/Cargo.toml`, runs the core tests, builds on `windows-latest`,
-and attaches `dictate.exe` to a GitHub release. Nothing is hand-edited.
+Tag `v*` on `main`. The workflow stamps the tag's version into the workspace
+`Cargo.toml` (both crates inherit it), runs the core tests, builds on
+`windows-latest`, and attaches `dictate.exe` to a GitHub release. Nothing is
+hand-edited.
+
+`Cargo.lock` is committed, as for any Rust binary, and CI builds with
+`--locked`: a dependency changes only when someone changes it on purpose.

@@ -34,7 +34,7 @@ impl RecentUtterances {
     }
 
     /// Newest first. A snapshot: the tray menu walks it while rebuilding
-    /// itself, and a live view is what crashed the C# version.
+    /// itself, and a live view could change under that walk.
     pub fn items(&self) -> Vec<Utterance> {
         self.items.iter().cloned().collect()
     }

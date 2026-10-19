@@ -52,3 +52,10 @@ jobs:
           name: dictate-exe
           path: target/release/dictate.exe
           if-no-files-found: error
+
+      # TEMPORARY: fetches the generated lock file once so it can be committed.
+      - name: Upload Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: Cargo.lock

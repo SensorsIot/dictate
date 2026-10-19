@@ -1,10 +1,11 @@
 [package]
 name = "dictate-windows"
-version = "0.2.0"
-edition = "2021"
 description = "The Windows head of dictate: hotkey, microphone, tray, overlay, typing."
-license = "MIT"
-publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
 build = "build.rs"
 
 [[bin]]

@@ -1,10 +1,11 @@
 [package]
 name = "dictate-core"
-version = "0.1.0"
-edition = "2021"
 description = "Platform-free half of dictate: PCM in, deliverable text out."
-license = "MIT"
-publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
 
 # Platform-free on purpose: CI compiles and tests this crate
 # on ubuntu-latest, so a Windows-only dependency here stops the build.

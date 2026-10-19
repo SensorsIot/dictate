@@ -11,8 +11,7 @@ use crate::win::wide;
 const CF_UNICODETEXT: u32 = 13;
 
 /// Puts `text` on the clipboard. Another process can hold the clipboard open
-/// for a moment, so opening is retried briefly before giving up — as
-/// WinForms' `Clipboard.SetText` did.
+/// for a moment, so opening is retried briefly before giving up.
 pub fn set_text(owner: HWND, text: &str) -> Result<(), String> {
     let units = wide(text);
 

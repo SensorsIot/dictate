@@ -1,17 +1,16 @@
 //! Records the default input device straight to the format Scribe wants:
 //! 16 kHz, mono, 16-bit PCM.
 //!
-//! winmm (waveIn) rather than WASAPI, as NAudio's WaveInEvent did: winmm
-//! converts to the requested format for us, whereas WASAPI shared mode hands
+//! winmm (waveIn) rather than WASAPI: winmm converts to the requested format
+//! for us, whereas WASAPI shared mode hands
 //! back the device's mix format and would need a resampler in the hot path.
 //!
 //! Each open device belongs to one capture thread, which opens it, feeds it
-//! buffers, and closes it. That ownership is the fix for the C# version's
-//! hardest bug: there, the UI thread asked the device to stop and disposed it
-//! while winmm might still own the buffers, and a close that lost that race
-//! left the microphone indicator lit until the process exited. Here nothing
-//! but the capture thread ever touches the handle, and it closes only after
-//! waveInReset has returned every buffer.
+//! buffers, and closes it. Nothing else ever touches the handle, and it is
+//! closed only after waveInReset has returned every buffer. Stopping a device
+//! from one thread while winmm still owns buffers handed out by another is a
+//! race; when the close loses it, the handle is never released and the
+//! microphone indicator stays lit until the process exits.
 //!
 //! **The UI thread never waits for a device.** It also runs the keyboard hook,
 //! and Windows skips a hook that does not answer within LowLevelHooksTimeout.

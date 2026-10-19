@@ -136,7 +136,7 @@ impl LogValue for Duration {
 }
 
 impl LogValue for f64 {
-    /// Up to three decimals, trailing zeros dropped — .NET's "0.###".
+    /// Up to three decimals, trailing zeros dropped: 0.25, not 0.250.
     fn render(&self) -> String {
         let fixed = format!("{self:.3}");
         fixed.trim_end_matches('0').trim_end_matches('.').to_owned()

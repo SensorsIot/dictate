@@ -6,7 +6,7 @@ fn console() -> TargetContext {
 }
 
 fn editor() -> TargetContext {
-    TargetContext::new("Code", "main.cs", false)
+    TargetContext::new("Code", "main.rs", false)
 }
 
 #[test]

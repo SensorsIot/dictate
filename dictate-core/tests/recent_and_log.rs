@@ -48,8 +48,8 @@ fn capacity_of_one_keeps_only_the_latest() {
 
 #[test]
 fn items_is_a_snapshot_that_adding_does_not_disturb() {
-    // The tray menu enumerates this while rebuilding itself. A live view is
-    // what crashed the C# version.
+    // The tray menu enumerates this while rebuilding itself; a live view could
+    // change under that walk.
     let mut recent = RecentUtterances::new(5);
     recent.add(text("one"));
 

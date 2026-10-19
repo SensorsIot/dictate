@@ -88,9 +88,6 @@ The split is deliberate: it keeps the whole testable half runnable on a Linux CI
 runner, and CI compiling `dictate-core` on ubuntu is what enforces it staying
 that way.
 
-Versions up to 0.1.21 were C# / .NET 9; the Rust port replaced them in 0.2.0.
-Settings and stored keys carry over unchanged.
-
 ## Documentation
 
 | | |
@@ -113,4 +110,4 @@ requirements are discharged by measurement and which are still only designed.
 
 ## Licence
 
-MIT.
+[MIT](LICENSE).

@@ -1,5 +1,4 @@
-//! dictate — push-to-talk dictation for Windows. The Rust port of
-//! `src/Dictate.Windows`.
+//! dictate — push-to-talk dictation for Windows.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 

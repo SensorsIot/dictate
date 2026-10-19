@@ -36,13 +36,14 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Building ${version}"
 
-      # Only the first `version =` line: the package's own. Later ones belong
-      # to dependencies.
+      # The workspace version in the root Cargo.toml is the only one; both
+      # crates inherit it. --locked is relaxed here alone, because changing the
+      # version legitimately rewrites the two workspace entries in Cargo.lock.
       - name: Stamp the version
         shell: bash
         run: |
-          sed -i "0,/^version = .*/s//version = \"${{ steps.version.outputs.version }}\"/" dictate-windows/Cargo.toml
-          grep -m1 '^version' dictate-windows/Cargo.toml
+          sed -i "0,/^version = .*/s//version = \"${{ steps.version.outputs.version }}\"/" Cargo.toml
+          grep -m1 '^version' Cargo.toml
 
       # Host tests run on Linux in ci.yml, but a tag must not publish a build
       # whose core is broken — so they run here too before anything is packaged.

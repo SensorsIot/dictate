@@ -39,7 +39,7 @@ fn read_title(window: HWND) -> String {
     }
 }
 
-/// Executable name without extension, like .NET's `Process.ProcessName`.
+/// Executable name without extension, e.g. "wezterm-gui".
 /// Limited-information access works on elevated processes too.
 fn read_process_name(window: HWND) -> String {
     let mut pid = 0u32;

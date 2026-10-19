@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | Released — v0.1.15. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
-| **Version** | 0.1.15 |
-| **Last updated** | 2026-08-17 |
+| **Status** | Released — v0.2.0. Requirements approved; host tier verified in CI, desktop tier partially discharged by measurement |
+| **Version** | 0.2.0 |
+| **Last updated** | 2026-10-19 |
 | **Derives from** | A design interview on 2026-08-16; the choices it settled are in §1.4 |
 | **Complexity** | Medium |
 | **Plane** | WHAT — externally observable behaviour only. Build and code rules live in [`../Harness/`](../Harness/00-Overview.md); operating instructions in [`../UserDocumentation/Manual.md`](../UserDocumentation/Manual.md). |
@@ -447,22 +447,20 @@ match, from the Windows default input. The device in use shall be logged.
 >
 > Lets dictation use one microphone (the user's Logitech BRIO) without making
 > it the default for every other application. Resolved on every open, so a
-> device plugged in after startup is used from the next press. Implemented in
-> both builds' successor, the Rust build, from 0.2.0.
+> device plugged in after startup is used from the next press.
 
 **FR-9.5** [Must] `[user]` When `KeepMicrophoneOpen` is off, the capture device
 shall stay open for 3 s after a session ends and then close, unless a new
 session has started in that time, which reuses it. Delivery of the ended
 session's text shall not wait for the close.
 
-> Chosen 2026-10-19 after the Rust build's desktop run: a press shortly after
+> Chosen 2026-10-19 after a desktop run: a press shortly after
 > a tap waited for the previous device to finish closing (about 3 s for a USB
 > interface closed mid-startup) and lost its first second of speech
 > (`mic.firstBuffer after=1070ms`). The cost is the Windows microphone
 > indicator staying lit 3 s longer after each dictation. *Must not:* text
 > delivered later than without the linger; the device still open 5 s after the
-> last session. *Tier:* desktop. Since 0.2.0; the C# builds up to 0.1.21 closed
-> on release.
+> last session. *Tier:* desktop.
 
 ## 10. Transcription
 

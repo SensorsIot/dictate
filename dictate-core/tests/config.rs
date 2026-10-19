@@ -2,7 +2,7 @@ use dictate_core::{DictateConfig, LanguageMode, OverlayPosition};
 
 #[test]
 fn defaults_match_the_configuration_catalogue() {
-    // FSD Appendix A. H-15 in the C# plan is still only designed.
+    // FSD Appendix A (H-15).
     let config = DictateConfig::default();
 
     assert_eq!(config.hotkey_virtual_key, 0x5C);
@@ -36,10 +36,9 @@ fn a_malformed_file_is_an_error_not_a_silent_default() {
 }
 
 #[test]
-fn files_written_by_the_csharp_build_read_back_the_same() {
-    // System.Text.Json was configured case-insensitive, comment-tolerant and
-    // trailing-comma-tolerant, with enums as names. A config that worked there
-    // has to work here.
+fn hand_edited_files_are_read_forgivingly() {
+    // config.json is edited by hand: keys in any case, comments, a trailing
+    // comma, enum values in lower case, and keys from a newer version.
     let config = DictateConfig::parse(
         r#"{
             // hand-edited

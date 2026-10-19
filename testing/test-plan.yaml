@@ -13,13 +13,6 @@
 # Rust toolchain in the devcontainer (Harness §1), so the host tier only ever
 # executes in CI, and the desktop tier only ever on the Windows machine by hand.
 # Read `last_result`, not `status`.
-#
-# Implementation change, 2026-10-19: C# (up to 0.1.21) was replaced by Rust
-# (0.2.0). Host tests were ported one for one and their results below are Rust
-# runs. Desktop results dated before 2026-10-19 were measured on the C# build;
-# they describe behaviour the Rust build must match but are not evidence for
-# it. Desktop runs of the Rust build are listed under `rust_desktop_runs` at the
-# end of this file.
 
 version: 1
 updated: 2026-08-16
@@ -222,7 +215,7 @@ tests:
       Matching a device name against winmm's inputs lives in dictate-windows
       and is desktop-tier.
 
-  # ---- host tier: implemented with the Rust port -----------------------------
+  # ---- host tier: Scribe request and configuration ---------------------------
 
   - id: H-13
     name: Scribe request omits language_code on Auto and sends it when pinned
@@ -279,9 +272,9 @@ tests:
     file: .github/workflows/release.yml
     verifies: [FR-20.2]
     status: implemented
-    last_result: never_run   # no tag has been pushed for the Rust build yet
+    last_result: never_run   # no release tag pushed yet
 
-  # ---- desktop tier: mostly designed; DT-16 and DT-17 have run ----------------
+  # ---- desktop tier ----------------------------------------------------------
 
   - id: DT-01
     name: Hotkey press and release drive the session from any focused app
@@ -289,13 +282,15 @@ tests:
     scenario: standard
     tier: desktop
     verifies: [FR-8.1, FR-8.2]
-    status: designed
+    status: implemented
     last_result: pass
-    evidence: user-reported, 2026-08-16 — first successful end-to-end dictation
-    evidence_quality: weak
+    evidence: >
+      2026-10-19, diagnostic log: complete sessions delivered into msedge,
+      WindowsTerminal and wezterm-gui, each ending recording.stop
+      reason=Released.
     gap: >
-      Observed in one application. "From any focused app" needs at least a
-      terminal, an editor and a browser before the clause is discharged.
+      A browser and two terminals. An editor is still to be logged before
+      "from any focused app" is fully discharged.
 
   - id: DT-02
     name: A tap shorter than MinimumHoldMs is discarded silently
@@ -303,7 +298,12 @@ tests:
     scenario: deviation
     tier: desktop
     verifies: [FR-5.2]
-    status: designed
+    status: implemented
+    last_result: pass
+    evidence: >
+      2026-10-19: three taps of 168-178 ms within two seconds, each logged
+      recording.discarded reason=tap, pressToStart=0ms. No notification, and
+      the Start menu stayed closed.
 
   - id: DT-03
     name: Focus change before delivery routes text to the clipboard
@@ -322,7 +322,12 @@ tests:
     tier: desktop
     verifies: [FR-6.4, FR-6.5]
     must_not: the command line executes
-    status: designed
+    status: implemented
+    last_result: pass
+    evidence: >
+      2026-10-19: WindowsTerminal and wezterm-gui classified console=True; every
+      delivery into them arrived as one line, and nothing ran until the user
+      pressed Enter.
 
   - id: DT-05
     name: A conhost-class window is classified as a console
@@ -354,15 +359,7 @@ tests:
       reason=Limit in the log. The eventual real key-up must be a no-op, not a
       second session.
     status: implemented
-    last_result: pass
-    evidence: >
-      MaximumRecordingSeconds set to 10, hotkey held for about 15 s:
-        recording.stop  reason=Limit  held=10458ms  audioMB=0.31
-        utterance       status=Ok  chars=37  lang=deu
-        delivery        method=typed  chars=38
-      Capture stopped at the cap, the balloon appeared, the pipeline ran on what
-      was captured and the truncated sentence was delivered. audioMB matches the
-      cap (10 s = 320,000 bytes), so the buffer filled rather than running short.
+    last_result: never_run
 
   - id: DT-08
     name: A second press during transcription is ignored
@@ -414,18 +411,15 @@ tests:
     tier: desktop
     verifies: [FR-6.4]
     status: implemented
-    last_result: fail        # against 0.1.3
+    last_result: pass
     evidence: >
-      Matched pair on the Windows machine, 2026-08-16: identical 214-character
-      text, same run, differing only in destination —
-        n=8  target=msedge           console=False  delivered 215  (+1)
-        n=9  target=WindowsTerminal  console=True   delivered 214  (+0)
-      The separator was suppressed for console targets. Fixed in 0.1.4; the
-      host-tier test The_separator_applies_in_consoles_too now pins it.
+      2026-10-19: target=WindowsTerminal console=True chars=21, delivered 22;
+      target=msedge console=False chars=10, delivered 11. The separator reaches
+      a terminal as well as a browser.
     note: >
-      Retest against 0.1.4. Kept as a desktop case rather than closed on the
-      unit test: the unit test proves the string is built with a space, not that
-      the space reaches a terminal.
+      Kept as a desktop case beside the host test
+      the_separator_applies_in_consoles_too, which proves the string is built
+      with a space, not that the space reaches a terminal.
 
   - id: DT-17
     name: Handles, threads and working set plateau across a long session
@@ -434,12 +428,13 @@ tests:
     tier: desktop
     verifies: [NFR-19.3, NFR-19.4]
     status: implemented
-    last_result: pass
+    last_result: partial
     evidence: >
-      Nine utterances on the Windows machine, 2026-08-16: handles oscillating in
-      a 709-753 band with no trend, threads near the starting 21, working set
-      flat around 91 MB. The earlier 45->97 MB reading was pool and JIT warm-up
-      settling. KeepMicrophoneOpen not required to hold it flat.
+      2026-10-19, thirteen utterances over twenty minutes: working set 21-28 MB,
+      handles 302-397 with no upward trend.
+    gap: >
+      Twenty minutes, not a working day. Repeat across a full session before
+      calling the plateau established.
 
   - id: DT-13
     name: Surrogate-pair characters are typed correctly
@@ -477,18 +472,10 @@ tests:
     #     \ConsentStore\microphone\NonPackaged\C:#...#dictate.exe
     oracle: consent-store LastUsedTimeStop becomes non-zero after release
     status: implemented
-    last_result: pass
-    evidence: >
-      On the Windows machine, hotkey held in a normal window until the overlay
-      showed, focus moved to an elevated PowerShell by clicking it, key released
-      there:
-        recording.start  pressToCapture=101ms
-        recording.stop   reason=Reconciled  held=11458ms
-        mic.close        confirmed=True
-      The key-up never reached the hook and the reconciler ended the session; the
-      consent store recorded the capture handle released. Note the Start menu
-      opens on the release, since suppression cannot apply to input the hook
-      never sees.
+    last_result: never_run
+    note: >
+      Expect the Start menu to open on the release: suppression cannot apply to
+      input the hook never sees.
     steps: >
       Needs the key-up to be genuinely lost, which means UIPI rather than a
       trick: open a window running as administrator, hold the hotkey, click into
@@ -514,13 +501,9 @@ tests:
     status: implemented
     last_result: pass
     evidence: >
-      First dictation of a fresh process: recording.start 23:46:39.466 against a
-      press implied at 23:46:39.452 — 14 ms.
-    note: >
-      One earlier run showed 615 ms on a first press and 10 ms on the second,
-      which was recorded here as an overlay first-Show cost. That diagnosis did
-      not survive: the 14 ms reading above is also a first press on a fresh
-      process. The 615 ms is unexplained and has not recurred.
+      2026-10-19, first press after 8.6 minutes idle: recording.start
+      10:07:50.891 against a press implied at 10:07:50.889 (stop 10:07:59.903,
+      held 9014 ms) — 2 ms.
 
   - id: DT-21
     name: A suppressed hotkey held for three seconds is one session, not eleven
@@ -540,10 +523,9 @@ tests:
     status: implemented
     last_result: pass
     evidence: >
-      Three-second hold on the Windows machine with SuppressHotkey on: one
-      recording.start, recording.stop reason=Released held=3564ms. Six
-      consecutive utterances afterwards were each a single session, holds of
-      1668-10302ms, every stop reason=Released.
+      2026-10-19 with SuppressHotkey on: holds of 1.4-9.0 s, each a single
+      recording.start ending recording.stop reason=Released. No hold was
+      fragmented into tap-length sessions.
 
   - id: DT-19
     name: A hotkey synthesised by another process is recorded as injected
@@ -557,12 +539,7 @@ tests:
       unelevated process. Note that only the injected flag is under test here —
       see DT-21 on why a synthetic press cannot stand in for a real hold.
     status: implemented
-    last_result: pass
-    evidence: >
-      Synthetic press against 0.1.16, IgnoreInjectedHotkey off:
-        recording.start  pressToCapture=10ms  injected=True  lowerIL=False
-      The second half of the oracle — hotkey.rejected with the setting on — is
-      not yet exercised.
+    last_result: never_run
 
   - id: DT-20
     name: The capture device is released after every press across a hundred cycles
@@ -570,8 +547,8 @@ tests:
     scenario: deviation
     tier: desktop
     verifies: [FR-8.7, FR-9.4]
-    # The leak this catches is intermittent — a race between StopRecording and
-    # Dispose — so one cycle proves nothing. Watch mic.close confirmed=False.
+    # The leak this catches is intermittent — a close racing buffers the driver
+    # still holds — so one cycle proves nothing. Watch mic.close confirmed=False.
     oracle: consent-store LastUsedTimeStop non-zero after each cycle; no mic.close confirmed=False
     steps: >
       Tap the hotkey repeatedly for a minute, then read the consent-store key and
@@ -580,10 +557,8 @@ tests:
     status: designed
     last_result: never_run
     note: >
-      Around twenty consecutive open/close cycles have been observed clean,
-      including eleven inside three seconds, every one mic.close confirmed=True.
-      Encouraging, but well short of the count this test asks for, and the race
-      it targets is intermittent.
+      2026-10-19: every mic.close in the log reports confirmed=True, including
+      three taps inside two seconds. Well short of the hundred cycles asked for.
 
   - id: DT-23
     name: A hotkey held while dictate starts does not leave the key stuck down
@@ -602,12 +577,7 @@ tests:
       here — the test is about which half of the pair the hook swallows, not
       about hold duration.
     status: implemented
-    last_result: pass
-    evidence: >
-      Synthetic run against 0.1.13 with SuppressHotkey on, hotkey 0x5C:
-        key down, dictate not running -> GetAsyncKeyState reports down: True
-        dictate started, key released  -> GetAsyncKeyState reports down: False
-      The same sequence against 0.1.12 left the key stranded down.
+    last_result: never_run
 
   # ---- workflow: the acceptance gate -----------------------------------------
 
@@ -624,8 +594,9 @@ tests:
       - any file is written
     status: implemented        # as a manual procedure
     last_result: partial
-    evidence: user-reported, 2026-08-16 — "the dictation works"
-    evidence_quality: weak
+    evidence: >
+      2026-10-19: launch, press, speech, release and text at the caret, in a
+      browser and two terminals, in German and English.
     note: >
       Deliberately independent of its children. Every atomic test above can pass
       while this one fails — each of those arranges the rig to suit itself,
@@ -640,72 +611,25 @@ tests:
 # ---- honest position --------------------------------------------------------
 #
 # 75 host tests pass on ubuntu-latest on every push, and the whole workspace —
-# including the Windows head — compiles on windows-latest.
+# including the Windows head — builds on windows-latest.
 #
-#   host      18 implemented (H-01..H-18), all passing in Rust CI
-#   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
-#   desktop   6 executed (DT-16 fail, DT-17 DT-19 DT-21 DT-23 pass, DT-22 fail)
-#             · the rest designed, each with steps a human can follow
-#   workflow   1 designed (W-01), acceptance gate
+#   host      18 implemented (H-01..H-18), all passing
+#   ci         1 passing (C-01) · 1 never run (C-02, needs a release tag)
+#   desktop    DT-01 DT-02 DT-04 DT-16 DT-21 DT-22 pass · DT-17 partial
+#             · the rest written as procedures, not yet run
+#   workflow   W-01 partial (step 8 outstanding)
 #
 # The desktop tier is manual by decision, not by omission — see tiers.desktop.
-# `designed` there means the procedure is written and nobody has run it, not
-# that code is missing.
+# `designed` or `never_run` there means the procedure is written and nobody has
+# run it, not that code is missing.
 #
-# What that does and does not mean. Verified: the pure logic — sanitisation,
-# degradation, WAV framing, response parsing, prompt construction — plus the fact
-# that dictate-core carries no Windows dependency.
+# Verified: the pure logic — sanitisation, degradation, WAV framing, response
+# parsing, prompt construction, configuration — plus the fact that
+# dictate-core carries no Windows dependency. On the desktop: the hotkey and
+# delivery into a browser and two terminals, tap discard, the console
+# separator, and press latency after a long idle.
 #
-# Since first release the desktop tier has begun reporting. Discharged by
-# measurement on the Windows machine: press-to-capture latency (46 ms external,
-# 7-9 ms internal, against a 300 ms hook budget), capture bracketing the hold to
-# within 34 ms, and the memory plateau above. Nine consecutive utterances
-# completed with status=Ok.
-#
-# Still NOT verified, and it is a lot: focus-change fallback, the console
-# newline prohibition end to end, elevated-window failure reporting, surrogate
-# pairs, the recording cap, and the no-persistence audit (FR-17.1) that nobody
-# has yet looked for. Those need the Windows machine and a human.
-
-# ---- Rust build on the desktop ------------------------------------------------
-#
-# Hand runs of the Rust build (0.2.0 and the rust-port builds before it). Kept
-# apart from the DT-* last_result fields above, which were measured on C#.
-
-rust_desktop_runs:
-  - date: 2026-10-19
-    build: rust-port 594ea9f plus the overlay fix
-    first_attempt: >
-      Crashed ~1 s after start in user32!DrawTextExWorker, called from the
-      overlay's WM_PAINT with an empty (dangling) text buffer. Fixed by not
-      drawing until a state has been shown.
-    pass:
-      - DT-01   # Edge and Windows Terminal, press and release drive the session
-      - DT-04   # Windows Terminal classified console=True; one line, nothing ran
-      - DT-21   # 3.9 s suppressed hold logged as one session
-    observed: >
-      Right Windows did not open the Start menu; the overlay appeared.
-      Three utterances: working set flat at 22 MB, handles 316 -> 302.
-      Press-to-capture 89-93 ms, first buffer 71-72 ms, as the C# build.
-    not_yet_run: [DT-02, DT-03, DT-08, DT-13, DT-14, DT-17, DT-18, DT-20, DT-23]
-
-  - date: 2026-10-19
-    build: rust-port, async device open, 3 s linger, reply guard, InputDevice
-    found_and_fixed:
-      - >
-        A tap followed quickly by a press blocked the UI thread for 909 ms
-        while the new device waited for the old one to close; the hook was
-        skipped and the Start menu opened. Devices now open off the UI thread.
-      - >
-        The one-word utterance "Explain" was answered by the cleanup model and
-        the answer typed. FR-11.12 now rejects such output.
-      - >
-        After a burst of taps the next press waited 1070 ms for audio. FR-9.5:
-        the device lingers 3 s and a press inside that window reuses it.
-    pass:
-      - DT-02   # three 170 ms taps discarded, pressToStart=0ms, no Start menu
-    observed: >
-      Logitech BRIO via InputDevice: first buffer 101-107 ms from a cold open;
-      text typed before the lingering device closed (delivery 10:08:31.85,
-      mic.close 10:08:33.23). Working set 26 MB, handles 388-397.
-    not_yet_run: [DT-03, DT-08, DT-13, DT-14, DT-15, DT-17, DT-18, DT-20, DT-23]
+# Still NOT verified: the focus-change fallback (DT-03), elevated windows
+# (DT-14, DT-18), surrogate pairs, the recording cap, injected-hotkey handling,
+# a hundred device cycles, start-while-held, and the no-persistence audit
+# (FR-17.1) that nobody has yet looked for.

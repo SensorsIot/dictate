@@ -1,7 +1,7 @@
 //! API keys in Windows Credential Manager, DPAPI-encrypted under the logged-in
 //! user. Chosen over a .env file so there is no plaintext key sitting on a
-//! daily-driver machine. Same target names as the C# build, so keys stored by
-//! either are read by both.
+//! daily-driver machine. The target names are part of the stored data:
+//! changing them orphans every key a user has already saved.
 
 use std::ptr::{self, null_mut};
 

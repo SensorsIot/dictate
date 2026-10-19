@@ -27,8 +27,7 @@ impl TargetContext {
 }
 
 /// Serialises a unit-only enum by name and reads it back case-insensitively,
-/// which is what System.Text.Json's `JsonStringEnumConverter` did — so an
-/// existing `config.json` reads the same under both implementations.
+/// so a hand-edited `config.json` may say "german" as well as "German".
 macro_rules! named_enum {
     ($type:ident { $($variant:ident),+ $(,)? }) => {
         impl $type {

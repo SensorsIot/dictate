@@ -1,3 +1,18 @@
 [workspace]
 members = ["dictate-core", "dictate-windows"]
 resolver = "2"
+
+# One version for the whole workspace. The release workflow stamps the tag's
+# version here; nothing else needs editing.
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/SensorsIot/dictate"
+publish = false
+
+# Small and fast is the point of a tray tool: a thin LTO pass and one codegen
+# unit cost CI seconds, not runtime.
+[profile.release]
+lto = "thin"
+codegen-units = 1

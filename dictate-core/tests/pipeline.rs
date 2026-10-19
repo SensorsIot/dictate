@@ -99,7 +99,7 @@ fn cleanup_returning_nothing_is_treated_as_a_failure_not_a_deletion() {
 
 #[test]
 fn a_reply_instead_of_a_cleanup_is_never_delivered() {
-    // What the first desktop run of the Rust build actually typed into a
+    // What the first desktop run actually typed into a
     // terminal, for a one-second fragment.
     let pipeline = build(
         StubTranscriber::ok("Okay."),
@@ -227,7 +227,7 @@ fn the_pinned_language_reaches_the_transcriber() {
 fn the_focused_window_reaches_the_cleaner() {
     let cleaner = StubCleaner::ok("cleaned text");
     let seen = Arc::clone(&cleaner.seen_target);
-    let target = TargetContext::new("Code", "Program.cs", false);
+    let target = TargetContext::new("Code", "main.rs", false);
     let pipeline = build(StubTranscriber::ok("raw text"), cleaner);
 
     pipeline.process(&some_audio(), &target);

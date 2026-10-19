@@ -1,5 +1,4 @@
-//! PCM in, deliverable text out. The whole platform-free half of dictate,
-//! ported from `src/Dictate.Core`.
+//! PCM in, deliverable text out. The whole platform-free half of dictate.
 //!
 //! Synchronous by design: the Windows head runs one pipeline at a time on a
 //! worker thread, so an async runtime would buy nothing but a dependency.

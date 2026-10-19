@@ -81,8 +81,7 @@ fn a_response_without_text_is_an_error() {
 
 #[test]
 fn auto_omits_language_code_and_a_pinned_language_sends_it() {
-    // FR-10.3 / FR-10.4. H-13 in the C# plan is still only designed; here the
-    // form is a pure function, so it is cheap to cover.
+    // FR-10.3 / FR-10.4. The form is a pure function, so no HTTP is needed.
     let auto = ScribeTranscriber::form_fields("scribe_v2", LanguageMode::Auto);
     let german = ScribeTranscriber::form_fields("scribe_v2", LanguageMode::German);
 
@@ -128,11 +127,11 @@ fn extra_instructions_are_appended() {
 
 #[test]
 fn the_user_prompt_carries_the_transcript_and_the_window() {
-    let prompt = build_user("hello there", &TargetContext::new("Code", "Program.cs", false));
+    let prompt = build_user("hello there", &TargetContext::new("Code", "main.rs", false));
 
     assert!(prompt.contains("hello there"));
     assert!(prompt.contains("Code"));
-    assert!(prompt.contains("Program.cs"));
+    assert!(prompt.contains("main.rs"));
 }
 
 #[test]
@@ -155,8 +154,7 @@ fn a_console_target_asks_for_a_single_line() {
 
 #[test]
 fn the_cleanup_request_is_deterministic_and_carries_the_model() {
-    // FR-11.8: temperature 0. The C# SDK set it as a typed property; here it is
-    // a JSON field we own, so it gets asserted.
+    // FR-11.8: temperature 0. The request body is ours, so it is asserted.
     let body = HaikuCleaner::request_body("claude-haiku-4-5", "system", "hello", &TargetContext::unknown());
 
     assert_eq!(body["temperature"], 0);
