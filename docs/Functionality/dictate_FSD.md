@@ -126,7 +126,7 @@ decoder is an interface.
 
 | Layer | Components | Project |
 |---|---|---|
-| **L2** Application logic | Dictation session state machine · delivery policy · degradation policy | `dictate-core` + `dictate-windows` |
+| **L2** Application logic | Dictation session state machine · delivery policy · degradation policy | `dictate-core` |
 | **L1** Interfaces | `ScribeTranscriber` · `HaikuCleaner` · `cleanup_prompt` · `text_sanitizer` · `wav` · `audio::Recorder` · `hotkey` · `injector` · `window_inspector` | mixed |
 | **L0** Foundation | `reqwest` · winmm · Credential Manager · configuration file | mixed |
 

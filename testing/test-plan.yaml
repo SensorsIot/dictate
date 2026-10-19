@@ -215,6 +215,20 @@ tests:
       Matching a device name against winmm's inputs lives in dictate-windows
       and is desktop-tier.
 
+  - id: H-19
+    name: The session state machine — pinned target, taps, one session at a time, delivery fallbacks
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: dictate-core/tests/session.rs
+    verifies: [FR-5.1, FR-5.2, FR-6.1, FR-6.2, FR-7.1, FR-17.2]
+    must_not: text typed into a window that did not have focus at key-press
+    status: implemented
+    last_result: never_run
+    gap: >
+      Runs against a fake platform. Whether each head reports focus, typing
+      and capture truthfully is desktop-tier.
+
   # ---- host tier: Scribe request and configuration ---------------------------
 
   - id: H-13

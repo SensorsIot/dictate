@@ -1,6 +1,6 @@
 //! PCM in, deliverable text out. The whole platform-free half of dictate.
 //!
-//! Synchronous by design: the Windows head runs one pipeline at a time on a
+//! Synchronous by design: a platform head runs one pipeline at a time on a
 //! worker thread, so an async runtime would buy nothing but a dependency.
 
 #![forbid(unsafe_code)]
@@ -15,6 +15,7 @@ pub mod model;
 pub mod pipeline;
 pub mod recent;
 pub mod scribe;
+pub mod session;
 pub mod text_sanitizer;
 pub mod wav;
 
@@ -26,6 +27,7 @@ pub use model::{LanguageMode, OverlayPosition, TargetContext, Transcript, Uttera
 pub use pipeline::DictationPipeline;
 pub use recent::RecentUtterances;
 pub use scribe::{ScribeTranscriber, Transcriber};
+pub use session::{Platform, Session, SessionState, StopReason};
 
 /// Cuts `value` to `max` characters, marking the cut. Counts chars, not bytes,
 /// so a German umlaut at the boundary cannot split a code point.

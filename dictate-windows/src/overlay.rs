@@ -27,22 +27,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::win::{instance, wide};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionState {
-    Idle,
-    Recording,
-    Transcribing,
-}
-
-impl SessionState {
-    pub fn name(self) -> &'static str {
-        match self {
-            SessionState::Idle => "idle",
-            SessionState::Recording => "recording",
-            SessionState::Transcribing => "transcribing",
-        }
-    }
-}
+pub use dictate_core::SessionState;
 
 const SPI_GETWORKAREA: u32 = 0x0030;
 const MA_NOACTIVATE: LRESULT = 3;
