@@ -64,6 +64,28 @@ fn files_written_by_the_csharp_build_read_back_the_same() {
 }
 
 #[test]
+fn one_setting_can_be_changed_without_rewriting_the_file() {
+    let directory = std::env::temp_dir().join(format!("dictate-core-set-{}", std::process::id()));
+    let path = directory.join("config.json");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(&path, r#"{ "EnableDiagnosticLog": true, "inputdevice": "Old" }"#).unwrap();
+
+    DictateConfig::set_string_in_file(&path, "InputDevice", Some("BRIO")).unwrap();
+    let written = std::fs::read_to_string(&path).unwrap();
+    let loaded = DictateConfig::load(&path).unwrap();
+
+    DictateConfig::set_string_in_file(&path, "InputDevice", None).unwrap();
+    let cleared = DictateConfig::load(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&directory);
+
+    assert_eq!(loaded.input_device.as_deref(), Some("BRIO"));
+    assert!(loaded.enable_diagnostic_log, "other keys survive");
+    assert!(!written.contains("MinimumHoldMs"), "defaults are not written out: {written}");
+    assert!(!written.contains("Old"), "the old spelling of the key is replaced, not duplicated");
+    assert_eq!(cleared.input_device, None);
+}
+
+#[test]
 fn an_unknown_enum_value_is_an_error() {
     assert!(DictateConfig::parse(r#"{ "Language": "Klingon" }"#).is_err());
 }

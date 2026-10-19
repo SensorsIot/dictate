@@ -57,26 +57,39 @@ pub fn resolve_input(wanted: Option<&str>) -> (u32, String) {
     let Some(wanted) = wanted.map(str::trim).filter(|w| !w.is_empty()) else {
         return (WAVE_MAPPER, "default".into());
     };
-    let needle = wanted.to_lowercase();
 
-    let count = unsafe { waveInGetNumDevs() };
-    for index in 0..count {
-        let mut caps: WAVEINCAPSW = unsafe { std::mem::zeroed() };
-        let found = unsafe { waveInGetDevCapsW(index as _, &mut caps, size_of::<WAVEINCAPSW>() as u32) } == 0;
-        if !found {
-            continue;
-        }
-
-        let name_units = caps.szPname;
-        let length = name_units.iter().position(|&u| u == 0).unwrap_or(name_units.len());
-        let name = String::from_utf16_lossy(&name_units[..length]);
-
-        if name.to_lowercase().contains(&needle) {
-            return (index, name);
-        }
+    let inputs = list_inputs();
+    match find_input(&inputs, wanted) {
+        Some(index) => (index as u32, inputs[index].clone()),
+        None => (WAVE_MAPPER, format!("default (no input matches '{wanted}')")),
     }
+}
 
-    (WAVE_MAPPER, format!("default (no input matches '{wanted}')"))
+/// Every winmm input, indexed by its device id.
+pub fn list_inputs() -> Vec<String> {
+    let count = unsafe { waveInGetNumDevs() };
+    (0..count)
+        .map(|index| {
+            let mut caps: WAVEINCAPSW = unsafe { std::mem::zeroed() };
+            let found = unsafe { waveInGetDevCapsW(index as _, &mut caps, size_of::<WAVEINCAPSW>() as u32) } == 0;
+            if !found {
+                return format!("Input {index}");
+            }
+
+            let name_units = caps.szPname;
+            let length = name_units.iter().position(|&u| u == 0).unwrap_or(name_units.len());
+            String::from_utf16_lossy(&name_units[..length])
+        })
+        .collect()
+}
+
+/// The first input whose name contains `wanted`, case-insensitively.
+pub fn find_input(inputs: &[String], wanted: &str) -> Option<usize> {
+    let needle = wanted.trim().to_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    inputs.iter().position(|name| name.to_lowercase().contains(&needle))
 }
 
 /// How long a device stays open after a session ends (FR-9.5). A press within
@@ -125,7 +138,7 @@ struct Inner {
     open_error: Mutex<Option<String>>,
     notify: Notify,
     keep_open: bool,
-    input_device: Option<String>,
+    input_device: Mutex<Option<String>>,
     max_bytes: usize,
 }
 
@@ -154,7 +167,7 @@ impl Recorder {
                 open_error: Mutex::new(None),
                 notify,
                 keep_open,
-                input_device,
+                input_device: Mutex::new(input_device),
                 max_bytes: maximum_seconds.max(1) as usize * bytes_per_second,
             }),
         }
@@ -208,6 +221,27 @@ impl Recorder {
 
         let inner = Arc::clone(&self.inner);
         thread::spawn(move || Inner::open_for(&inner, Some(session)));
+    }
+
+    /// Switches the microphone. Takes effect from the next session: a session
+    /// in progress keeps the device it started on. An idle device left open
+    /// by the linger (or by keep-open mode) is closed so the next press opens
+    /// the new one.
+    pub fn set_input_device(&self, input_device: Option<String>) {
+        *lock(&self.inner.input_device) = input_device;
+
+        if lock(&self.inner.capture).recording {
+            return;
+        }
+
+        if let Some(device) = lock(&self.inner.device).take() {
+            device.close(false);
+        }
+
+        if self.inner.keep_open {
+            let inner = Arc::clone(&self.inner);
+            thread::spawn(move || Inner::open_for(&inner, None));
+        }
     }
 
     /// Why the last `OpenFailed` happened.
@@ -273,7 +307,7 @@ impl Inner {
     /// Resolved on every open rather than once, so a camera plugged in after
     /// startup is picked up by the next press.
     fn device_id(&self) -> u32 {
-        resolve_input(self.input_device.as_deref()).0
+        resolve_input(lock(&self.input_device).as_deref()).0
     }
 
     /// Opens a device on the calling (background) thread and keeps it only if

@@ -440,6 +440,11 @@ captured before the failure shall still be processed.
 from the first input whose name contains it, case-insensitively; with no
 match, from the Windows default input. The device in use shall be logged.
 
+> The tray menu's **Microphone** submenu lists "Windows default" and every
+> input, checks the one in use, and on selection switches from the next press
+> and writes only `InputDevice` into config.json, leaving the user's other
+> keys untouched.
+>
 > Lets dictation use one microphone (the user's Logitech BRIO) without making
 > it the default for every other application. Resolved on every open, so a
 > device plugged in after startup is used from the next press. Implemented in

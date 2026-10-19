@@ -84,7 +84,7 @@ The settings you are most likely to want:
 | `ShowOverlay` | `true` | The recording indicator. dictate makes no sound, so this is the only cue — turning it off leaves nothing to tell you a session is running |
 | `OverlayPosition` | `BottomRight` | Where the recording indicator sits: `BottomRight`, `BottomLeft`, `TopRight`, `TopLeft`, or `NearCursor` to have it follow the mouse |
 | `EnableDiagnosticLog` | `false` | Write `%LOCALAPPDATA%\dictate\dictate.log` — timings and outcomes, never your text |
-| `InputDevice` | `null` | Part of the name of the microphone to use, e.g. `"BRIO"` for "Microphone (Logitech BRIO)". Without it, or if nothing matches, dictate uses the Windows default input. Rust build only |
+| `InputDevice` | `null` | Part of the name of the microphone to use, e.g. `"BRIO"` for "Microphone (Logitech BRIO)". Without it, or if nothing matches, dictate uses the Windows default input. Also selectable from the tray menu under **Microphone**, which saves the choice here. Rust build only |
 | `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently. When off, the microphone still stays open for 3 s after each dictation (Rust build), so a quick follow-up press captures at once; your text is not delayed by this |
 | `ExtraConsoleProcesses` | `[]` | Extra terminal executables that must never receive newlines |
 

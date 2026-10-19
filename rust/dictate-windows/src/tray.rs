@@ -12,7 +12,7 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIcon, CreatePopupMenu, DestroyIcon, DestroyMenu, GetCursorPos, PostMessageW,
-    SetForegroundWindow, TrackPopupMenu, HICON, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, TPM_NONOTIFY,
+    SetForegroundWindow, TrackPopupMenu, HICON, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, TPM_NONOTIFY,
     TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_NULL,
 };
 
@@ -25,10 +25,14 @@ const ID_OPEN_CONFIG: usize = 10;
 const ID_REAUTH: usize = 11;
 const ID_QUIT: usize = 12;
 const ID_RECENT_BASE: usize = 100;
+const ID_MIC_DEFAULT: usize = 200;
+const ID_MIC_BASE: usize = 201;
 
 pub enum MenuChoice {
     Nothing,
     Recent(usize),
+    /// None: the Windows default input. Some: an index into the inputs shown.
+    Microphone(Option<usize>),
     OpenConfigFolder,
     ReEnterKeys,
     Quit,
@@ -114,7 +118,9 @@ impl Drop for Tray {
 
 /// Shows the context menu at the cursor and returns what was picked. Runs a
 /// modal loop, so the caller must not be holding application state.
-pub fn show_menu(hwnd: HWND, recent: &[String]) -> MenuChoice {
+/// `inputs` are the microphones to offer, `selected` the one in use (None for
+/// the Windows default).
+pub fn show_menu(hwnd: HWND, recent: &[String], inputs: &[String], selected: Option<usize>) -> MenuChoice {
     unsafe {
         let menu = CreatePopupMenu();
         let recent_menu = CreatePopupMenu();
@@ -127,6 +133,19 @@ pub fn show_menu(hwnd: HWND, recent: &[String]) -> MenuChoice {
         let recent_flags = if recent.is_empty() { MF_POPUP | MF_GRAYED } else { MF_POPUP };
         let recent_label = wide("Recent");
         AppendMenuW(menu, recent_flags, recent_menu as usize, recent_label.as_ptr());
+
+        let microphone_menu = CreatePopupMenu();
+        let checked = |on: bool| if on { MF_CHECKED } else { 0 };
+        let default_label = wide("Windows default");
+        AppendMenuW(microphone_menu, MF_STRING | checked(selected.is_none()), ID_MIC_DEFAULT, default_label.as_ptr());
+        AppendMenuW(microphone_menu, MF_SEPARATOR, 0, null());
+        for (index, name) in inputs.iter().enumerate() {
+            let label = wide(&name.replace('&', "&&"));
+            AppendMenuW(microphone_menu, MF_STRING | checked(selected == Some(index)), ID_MIC_BASE + index, label.as_ptr());
+        }
+        let microphone_label = wide("Microphone");
+        AppendMenuW(menu, MF_POPUP, microphone_menu as usize, microphone_label.as_ptr());
+
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
         let open_config = wide("Open config folder");
         AppendMenuW(menu, MF_STRING, ID_OPEN_CONFIG, open_config.as_ptr());
@@ -154,13 +173,15 @@ pub fn show_menu(hwnd: HWND, recent: &[String]) -> MenuChoice {
         );
         PostMessageW(hwnd, WM_NULL, 0, 0);
 
-        DestroyMenu(menu); // destroys the submenu with it
+        DestroyMenu(menu); // destroys the submenus with it
 
         match command as usize {
             0 => MenuChoice::Nothing,
             ID_OPEN_CONFIG => MenuChoice::OpenConfigFolder,
             ID_REAUTH => MenuChoice::ReEnterKeys,
             ID_QUIT => MenuChoice::Quit,
+            ID_MIC_DEFAULT => MenuChoice::Microphone(None),
+            id if id >= ID_MIC_BASE => MenuChoice::Microphone(Some(id - ID_MIC_BASE)),
             id if id >= ID_RECENT_BASE => MenuChoice::Recent(id - ID_RECENT_BASE),
             _ => MenuChoice::Nothing,
         }

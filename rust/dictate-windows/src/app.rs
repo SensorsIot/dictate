@@ -31,7 +31,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_CONTEXTMENU, WM_DESTROY, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 
-use crate::audio::{resolve_input, Recorder, RecorderEvent};
+use crate::audio::{self, resolve_input, Recorder, RecorderEvent};
 use crate::overlay::{Overlay, SessionState};
 use crate::tray::{self, MenuChoice, Tray};
 use crate::win::{
@@ -329,11 +329,20 @@ fn handle(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LR
 
 /// Runs the menu's modal loop with the application state released.
 fn on_tray_menu(hwnd: HWND) {
-    let recent: Vec<String> =
-        with_app(|app| app.recent.items().into_iter().map(|u| u.text).collect()).unwrap_or_default();
+    let (recent, configured): (Vec<String>, Option<String>) = with_app(|app| {
+        (app.recent.items().into_iter().map(|u| u.text).collect(), app.config.input_device.clone())
+    })
+    .unwrap_or_default();
 
-    match tray::show_menu(hwnd, &recent) {
+    let inputs = audio::list_inputs();
+    let selected = configured.as_deref().and_then(|wanted| audio::find_input(&inputs, wanted));
+
+    match tray::show_menu(hwnd, &recent, &inputs, selected) {
         MenuChoice::Nothing => {}
+        MenuChoice::Microphone(choice) => {
+            let name = choice.and_then(|index| inputs.get(index).cloned());
+            with_app(|app| app.select_microphone(name));
+        }
         MenuChoice::Recent(index) => {
             if let Some(text) = recent.get(index) {
                 if let Err(error) = clipboard::set_text(hwnd, text) {
@@ -413,6 +422,24 @@ impl App {
                 field("lowerIL", origin & hotkey::ORIGIN_LOWER_INTEGRITY != 0),
             ],
         );
+    }
+
+    /// FR-9.6 from the tray menu: switch now, and remember it in config.json
+    /// so the next start uses the same microphone.
+    fn select_microphone(&mut self, name: Option<String>) {
+        self.config.input_device = name.clone();
+        self.recorder.set_input_device(name.clone());
+
+        let shown = name.clone().unwrap_or_else(|| "the Windows default input".into());
+        self.log.event("mic.selected", &[field("input", shown.as_str())]);
+
+        match DictateConfig::set_string_in_file(&paths::config_file(), "InputDevice", name.as_deref()) {
+            Ok(()) => self.tray.notify("Microphone", &format!("dictate now records from {shown}.")),
+            Err(error) => self.tray.notify(
+                "Microphone changed for this session only",
+                &format!("Using {shown}, but config.json could not be updated: {error}"),
+            ),
+        }
     }
 
     /// The recorder could not open a device for the session in progress and

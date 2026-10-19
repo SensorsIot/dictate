@@ -128,6 +128,36 @@ impl DictateConfig {
         serde_json::from_value(Value::Object(normalised)).map_err(|e| Error::new(e.to_string()))
     }
 
+    /// Sets one string setting in the file at `path`, or removes it for
+    /// `None`, leaving every other key as the user wrote it. Used by the tray
+    /// menu, which must not turn a three-line config into a full dump of
+    /// defaults that would then pin today's values forever.
+    pub fn set_string_in_file(path: &Path, key: &str, value: Option<&str>) -> Result<(), Error> {
+        let mut entries = if path.exists() {
+            let text = fs::read_to_string(path)?;
+            let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+            match json5::from_str::<Value>(text).map_err(|e| Error::new(e.to_string()))? {
+                Value::Object(entries) => entries,
+                _ => return Err(Error::new("expected a JSON object at the top level")),
+            }
+        } else {
+            Map::new()
+        };
+
+        entries.retain(|existing, _| !existing.eq_ignore_ascii_case(key));
+        if let Some(value) = value {
+            entries.insert(key.to_owned(), Value::String(value.to_owned()));
+        }
+
+        if let Some(directory) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(directory)?;
+        }
+
+        let json = serde_json::to_string_pretty(&Value::Object(entries)).map_err(|e| Error::new(e.to_string()))?;
+        fs::write(path, json)?;
+        Ok(())
+    }
+
     pub fn save(&self, path: &Path) -> Result<(), Error> {
         if let Some(directory) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             fs::create_dir_all(directory)?;
