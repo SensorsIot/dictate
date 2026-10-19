@@ -466,11 +466,10 @@ tests:
     scenario: deviation
     tier: desktop
     verifies: [FR-8.7]
-    # Oracle: the Windows consent store, which is what drives the taskbar
-    # microphone indicator. LastUsedTimeStop == 0 means the device is still open.
-    #   HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager
-    #     \ConsentStore\microphone\NonPackaged\C:#...#dictate.exe
-    oracle: consent-store LastUsedTimeStop becomes non-zero after release
+    oracle: >
+      recording.stop reason=Reconciled within about a second of the release,
+      then mic.close confirmed=True, and the microphone indicator in the
+      taskbar goes out
     status: implemented
     last_result: never_run
     note: >
@@ -479,9 +478,8 @@ tests:
     steps: >
       Needs the key-up to be genuinely lost, which means UIPI rather than a
       trick: open a window running as administrator, hold the hotkey, click into
-      the elevated window while still holding, release it there. Read
-      LastUsedTimeStop under ConsentStore\microphone\NonPackaged for dictate.exe
-      before and after.
+      the elevated window while still holding, release it there. With
+      EnableDiagnosticLog on, read the recording.stop and mic.close lines.
 
   - id: DT-22
     name: A press after a long idle is not delayed by a first-use cost
@@ -555,11 +553,12 @@ tests:
     verifies: [FR-8.7, FR-9.4]
     # The leak this catches is intermittent — a close racing buffers the driver
     # still holds — so one cycle proves nothing. Watch mic.close confirmed=False.
-    oracle: consent-store LastUsedTimeStop non-zero after each cycle; no mic.close confirmed=False
+    oracle: one mic.close confirmed=True per press; no mic.close confirmed=False
     steps: >
-      Tap the hotkey repeatedly for a minute, then read the consent-store key and
-      grep the log for mic.close confirmed=False. Taps below MinimumHoldMs are
-      fine and cheapest — the device still opens and closes on each one.
+      Tap the hotkey a hundred times, more than 3 s apart so the linger
+      (FR-9.5) does not keep one device open across taps, then count mic.close
+      lines in the log. Taps below MinimumHoldMs are fine and cheapest — the
+      device still opens and closes on each one.
     status: implemented
     last_result: pass
     evidence: >
@@ -569,10 +568,6 @@ tests:
       150 mic.close confirmed=True, no confirmed=False, no mic.openFailed, no
       utterance sent. Handles 231 -> 285 over the first 100 (warm-up), then
       282 -> 287 over the next 50; working set 19.5-19.7 MB.
-    gap: >
-      The consent-store half of the oracle could not be read: on this machine
-      Windows has no entry for this exe, and its only dictate entry was last
-      updated 2026-08-18 despite daily use since. The log oracle stands alone.
 
   - id: DT-23
     name: A hotkey held while dictate starts does not leave the key stuck down
