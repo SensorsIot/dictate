@@ -333,7 +333,7 @@ fn handle(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LR
                 app.log.event("start.closed", &[field("ok", closed)]);
                 app.tray.notify(
                     "Administrator window",
-                    "Windows hides the hotkey from dictate in windows running as administrator.                      Dictate in an ordinary window and paste with Ctrl+V.",
+                    "Windows hides the hotkey from dictate in windows running as administrator. Dictate in an ordinary window and paste with Ctrl+V.",
                 );
             });
         }
