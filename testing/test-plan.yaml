@@ -272,7 +272,7 @@ tests:
     file: .github/workflows/release.yml
     verifies: [FR-20.2]
     status: implemented
-    last_result: never_run   # no release tag pushed yet
+    last_result: pass        # release run 39225771049, v0.2.0, 2026-10-19
 
   # ---- desktop tier ----------------------------------------------------------
 
@@ -614,7 +614,7 @@ tests:
 # including the Windows head — builds on windows-latest.
 #
 #   host      18 implemented (H-01..H-18), all passing
-#   ci         1 passing (C-01) · 1 never run (C-02, needs a release tag)
+#   ci         2 passing (C-01, C-02)
 #   desktop    DT-01 DT-02 DT-04 DT-16 DT-21 DT-22 pass · DT-17 partial
 #             · the rest written as procedures, not yet run
 #   workflow   W-01 partial (step 8 outstanding)
