@@ -88,6 +88,20 @@ The split is deliberate: it keeps the whole testable half runnable on a Linux CI
 runner, and CI compiling `dictate-core` on ubuntu is what enforces it staying
 that way.
 
+## Changing it
+
+You do not need Rust installed. Push a branch or open a pull request, and
+GitHub Actions compiles it, runs the tests on Linux and Windows, and attaches
+a ready `dictate.exe` to the run (*Actions → the run → Artifacts →
+dictate-exe*). Download it, quit the running dictate from its tray menu, and
+start the new one. Settings and stored keys stay where they are.
+
+Before changing behaviour, read the [functional specification](docs/Functionality/FSD.md):
+the rules that matter most (no newline into a terminal, text only into the
+window you started in, raw transcript when cleanup fails) are specified there
+and pinned by tests. [How it is built](docs/Harness/00-Overview.md) covers the
+rest.
+
 ## Documentation
 
 | | |

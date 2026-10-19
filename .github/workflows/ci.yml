@@ -27,7 +27,7 @@ jobs:
       # the testable half of the project cannot quietly slip out of CI.
       # dictate-windows builds here as a stub, so the whole workspace is checked.
       - name: Test
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
 
   windows:
     name: Windows build
@@ -38,11 +38,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build
-        run: cargo build --release -p dictate-windows
+        run: cargo build --release -p dictate-windows --locked
 
       # The core again, on the platform it ships on.
       - name: Test core
-        run: cargo test -p dictate-core
+        run: cargo test -p dictate-core --locked
 
       # Every push to main leaves a runnable exe, so a fix can be tried on the
       # desktop without cutting a release.
@@ -52,10 +52,3 @@ jobs:
           name: dictate-exe
           path: target/release/dictate.exe
           if-no-files-found: error
-
-      # TEMPORARY: fetches the generated lock file once so it can be committed.
-      - name: Upload Cargo.lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-lock
-          path: Cargo.lock
