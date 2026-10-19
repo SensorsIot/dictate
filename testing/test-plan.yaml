@@ -224,7 +224,7 @@ tests:
     verifies: [FR-5.1, FR-5.2, FR-6.1, FR-6.2, FR-7.1, FR-17.2]
     must_not: text typed into a window that did not have focus at key-press
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39259367720, 2026-10-19
     gap: >
       Runs against a fake platform. Whether each head reports focus, typing
       and capture truthfully is desktop-tier.
