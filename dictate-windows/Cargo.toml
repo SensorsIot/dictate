@@ -1,6 +1,6 @@
 [package]
 name = "dictate-windows"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "The Windows head of dictate: hotkey, microphone, tray, overlay, typing."
 license = "MIT"

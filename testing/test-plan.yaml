@@ -10,9 +10,16 @@
 # last_result: never_run | pass | fail   (+ run_id when evidence exists)
 #
 # A test that is `implemented` but `never_run` discharges nothing. There is no
-# .NET SDK in the devcontainer (Harness §0), so the host tier only ever
+# Rust toolchain in the devcontainer (Harness §1), so the host tier only ever
 # executes in CI, and the desktop tier only ever on the Windows machine by hand.
 # Read `last_result`, not `status`.
+#
+# Implementation change, 2026-10-19: C# (up to 0.1.21) was replaced by Rust
+# (0.2.0). Host tests were ported one for one and their results below are Rust
+# runs. Desktop results dated before 2026-10-19 were measured on the C# build;
+# they describe behaviour the Rust build must match but are not evidence for
+# it. Desktop runs of the Rust build are listed under `rust_desktop_runs` at the
+# end of this file.
 
 version: 1
 updated: 2026-08-16
@@ -21,7 +28,7 @@ tiers:
   host:
     runs_on: ubuntu-latest
     trigger: every push
-    reaches: Dictate.Core only
+    reaches: dictate-core only
   ci:
     runs_on: windows-latest
     trigger: tag push
@@ -45,11 +52,11 @@ tests:
     kind: atomic
     scenario: negative
     tier: host
-    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    file: dictate-core/tests/text_sanitizer.rs
     verifies: [FR-6.4]
     must_not: any \r or \n survives into text bound for a console
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
     note: >
       The highest-consequence test in the suite. A newline typed into a shell is
       Enter, and Enter runs whatever is on the line.
@@ -59,116 +66,116 @@ tests:
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    file: dictate-core/tests/text_sanitizer.rs
     verifies: [FR-6.4]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-03
     name: Console classification by process name, class and user list
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    file: dictate-core/tests/text_sanitizer.rs
     verifies: [FR-6.5]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
     gap: >
       Covers the process-name and user-list arms only. The ConsoleWindowClass arm
-      lives in Dictate.Windows and is unreachable from the host tier — see DT-05.
+      lives in dictate-windows and is unreachable from the host tier — see DT-05.
 
   - id: H-04
     name: Cleanup failure falls back to the raw transcript
     kind: atomic
     scenario: deviation
     tier: host
-    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    file: dictate-core/tests/pipeline.rs
     verifies: [FR-7.1]
     must_not: the utterance is dropped, or an exception escapes the pipeline
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-05
     name: Empty cleanup output is a failure, not a deletion
     kind: atomic
     scenario: deviation
     tier: host
-    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    file: dictate-core/tests/pipeline.rs
     verifies: [FR-7.1]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-06
     name: Transcription failure delivers nothing and reports why
     kind: atomic
     scenario: deviation
     tier: host
-    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    file: dictate-core/tests/pipeline.rs
     verifies: [FR-7.2, FR-7.4]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-07
     name: Silence ends the session without text
     kind: atomic
     scenario: deviation
     tier: host
-    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    file: dictate-core/tests/pipeline.rs
     verifies: [FR-7.3]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-08
     name: Empty audio never reaches the network
     kind: atomic
     scenario: negative
     tier: host
-    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    file: dictate-core/tests/pipeline.rs
     verifies: [FR-5.2]
     must_not: a billable request for an utterance with no audio
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-09
     name: Pinned language and target context reach their stages
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/PipelineTests.cs
+    file: dictate-core/tests/pipeline.rs
     verifies: [FR-10.3, FR-11.7]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-10
     name: WAV header declares 16 kHz mono 16-bit and correct sizes
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
+    file: dictate-core/tests/wav_scribe_prompt.rs
     verifies: [FR-9.1]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-11
     name: Scribe response parsing extracts text and language, rejects malformed
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
+    file: dictate-core/tests/wav_scribe_prompt.rs
     verifies: [FR-10.5]
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-12
     name: Cleanup prompt forbids translating and answering, and carries vocabulary
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/WavAndScribeTests.cs
+    file: dictate-core/tests/wav_scribe_prompt.rs
     verifies: [FR-11.4, FR-11.5, FR-11.6]
     must_not: the no-translation clause is absent
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
     note: >
       Verifies the prompt says it, not that the model obeys it. Obedience is
       the cleanup model's risk, and is checked at the desktop tier.
@@ -178,111 +185,101 @@ tests:
     kind: atomic
     scenario: standard
     tier: host
-    file: tests/Dictate.Core.Tests/TextSanitizerTests.cs
+    file: dictate-core/tests/text_sanitizer.rs
     verifies: [FR-11.11]
     must_not: any ß or ẞ survives into delivered text while SwissSpelling is on
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39219226587, 2026-10-19
     note: >
-      The fallback and off-switch cases are in PipelineTests.cs
-      (Swiss_spelling_applies_to_cleaned_and_fallback_text,
-      Swiss_spelling_can_be_turned_off).
+      The fallback and off-switch cases are in dictate-core/tests/pipeline.rs
+      (swiss_spelling_applies_to_cleaned_and_fallback_text,
+      swiss_spelling_can_be_turned_off).
 
-  - id: R-01
-    name: Rust core port passes the host-tier suite ported from Dictate.Core.Tests
-    kind: suite
+  - id: H-17
+    name: A cleanup reply far longer than the transcript is never delivered
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: dictate-core/tests/pipeline.rs
+    verifies: [FR-11.12, FR-7.1]
+    must_not: the model's words typed as dictated text
+    status: implemented
+    last_result: pass        # run 39219226587, 2026-10-19
+    note: >
+      Uses the exact reply that reached a terminal on 2026-10-19 ("I have no
+      transcript to clean…") for the one-word utterance "Explain".
+
+  - id: H-18
+    name: InputDevice is read case-insensitively and one setting can be written back alone
+    kind: atomic
     scenario: standard
     tier: host
-    file: rust/dictate-core/tests/
-    verifies: []
+    file: dictate-core/tests/config.rs
+    verifies: [FR-9.6]
     status: implemented
-    last_result: pass        # run 39021568271, 2026-10-17, 71 tests
-    note: >
-      Branch rust-port only. Evidence that the Rust core matches the C# one, not
-      evidence for any requirement: the shipped binary is still C#, so crediting
-      FR ids here would mark requirements verified by code nobody runs. Once the
-      Rust head ships, split this into per-requirement entries.
+    last_result: pass        # run 39219226587, 2026-10-19
+    gap: >
+      Matching a device name against winmm's inputs lives in dictate-windows
+      and is desktop-tier.
 
-  - id: R-02
-    name: Rust Windows head compiles and links on windows-latest
-    kind: build
-    scenario: standard
-    tier: ci
-    file: rust/dictate-windows/
-    verifies: []
-    status: implemented
-    last_result: pass        # run 39023710938, 2026-10-17, no compiler warnings
-    note: >
-      Compiles is all this entry shows. Desktop checks run by hand against the
-      Rust build are listed below, kept apart from the DT-* last_result fields,
-      which record the C# build that ships.
-    desktop_runs:
-      - date: 2026-10-19
-        build: rust-port 594ea9f plus the overlay fix
-        first_attempt: >
-          Crashed ~1 s after start in user32!DrawTextExWorker, called from the
-          overlay's WM_PAINT with an empty (dangling) text buffer. Fixed by not
-          drawing until a state has been shown.
-        pass:
-          - DT-01   # Edge and Windows Terminal, press and release drive the session
-          - DT-04   # Windows Terminal classified console=True; one line, nothing ran
-          - DT-21   # 3.9 s suppressed hold logged as one session
-        observed: >
-          Right Windows did not open the Start menu; the overlay appeared.
-          Three utterances: working set flat at 22 MB, handles 316 -> 302.
-          Press-to-capture 89-93 ms, first buffer 71-72 ms, as the C# build.
-        not_yet_run: [DT-02, DT-03, DT-08, DT-13, DT-14, DT-17, DT-18, DT-20, DT-23]
-
-  # ---- host tier: designed, not yet implemented ------------------------------
+  # ---- host tier: implemented with the Rust port -----------------------------
 
   - id: H-13
     name: Scribe request omits language_code on Auto and sends it when pinned
     kind: atomic
     scenario: standard
     tier: host
+    file: dictate-core/tests/wav_scribe_prompt.rs
     verifies: [FR-10.3, FR-10.4]
-    status: designed
-    needs: a fake HttpMessageHandler capturing the multipart body
+    status: implemented
+    last_result: pass        # run 39219226587, 2026-10-19
+    note: >
+      The multipart fields are a pure function (ScribeTranscriber::form_fields),
+      so no fake HTTP handler is needed.
 
   - id: H-14
     name: Malformed config.json is a startup error, not a silent default
     kind: atomic
     scenario: negative
     tier: host
+    file: dictate-core/tests/config.rs
     verifies: [FR-16.2]
     must_not: defaults applied silently
-    status: designed
+    status: implemented
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: H-15
     name: Missing config.json yields the documented defaults
     kind: atomic
     scenario: standard
     tier: host
+    file: dictate-core/tests/config.rs
     verifies: [FR-16.1]
-    status: designed
+    status: implemented
+    last_result: pass        # run 39219226587, 2026-10-19
 
   # ---- ci tier ---------------------------------------------------------------
 
   - id: C-01
-    name: Solution restores, builds and host tests pass on Linux
+    name: Workspace builds and host tests pass on Linux
     kind: atomic
     scenario: standard
     tier: ci
     file: .github/workflows/ci.yml
     verifies: [FR-20.1, FR-20.3]
-    must_not: a Windows-only dependency reaches Dictate.Core
+    must_not: a Windows-only dependency reaches dictate-core
     status: implemented
-    last_result: pass        # run 31955257714, 2026-08-16
+    last_result: pass        # run 39219226587, 2026-10-19
 
   - id: C-02
-    name: Tagged build publishes a self-contained single-file exe
+    name: Tagged build publishes dictate.exe
     kind: atomic
     scenario: standard
     tier: ci
     file: .github/workflows/release.yml
     verifies: [FR-20.2]
     status: implemented
-    last_result: never_run   # no tag has been pushed yet
+    last_result: never_run   # no tag has been pushed for the Rust build yet
 
   # ---- desktop tier: mostly designed; DT-16 and DT-17 have run ----------------
 
@@ -461,7 +458,7 @@ tests:
     status: designed
 
   - id: DT-15
-    name: Published exe runs on a machine with no .NET installed
+    name: Published exe runs on a clean machine with nothing installed
     kind: atomic
     scenario: standard
     tier: desktop
@@ -642,10 +639,10 @@ tests:
 
 # ---- honest position --------------------------------------------------------
 #
-# 71 assertions across the host tests pass on ubuntu-latest on every push, and
-# the whole solution — including the Windows head — compiles.
+# 75 host tests pass on ubuntu-latest on every push, and the whole workspace —
+# including the Windows head — compiles on windows-latest.
 #
-#   host      16 implemented, all passing · 3 designed
+#   host      18 implemented (H-01..H-18), all passing in Rust CI
 #   ci         1 passing (C-01) · 1 never run (C-02, needs a tag)
 #   desktop   6 executed (DT-16 fail, DT-17 DT-19 DT-21 DT-23 pass, DT-22 fail)
 #             · the rest designed, each with steps a human can follow
@@ -657,7 +654,7 @@ tests:
 #
 # What that does and does not mean. Verified: the pure logic — sanitisation,
 # degradation, WAV framing, response parsing, prompt construction — plus the fact
-# that Dictate.Core carries no Windows dependency.
+# that dictate-core carries no Windows dependency.
 #
 # Since first release the desktop tier has begun reporting. Discharged by
 # measurement on the Windows machine: press-to-capture latency (46 ms external,
@@ -669,3 +666,46 @@ tests:
 # newline prohibition end to end, elevated-window failure reporting, surrogate
 # pairs, the recording cap, and the no-persistence audit (FR-17.1) that nobody
 # has yet looked for. Those need the Windows machine and a human.
+
+# ---- Rust build on the desktop ------------------------------------------------
+#
+# Hand runs of the Rust build (0.2.0 and the rust-port builds before it). Kept
+# apart from the DT-* last_result fields above, which were measured on C#.
+
+rust_desktop_runs:
+  - date: 2026-10-19
+    build: rust-port 594ea9f plus the overlay fix
+    first_attempt: >
+      Crashed ~1 s after start in user32!DrawTextExWorker, called from the
+      overlay's WM_PAINT with an empty (dangling) text buffer. Fixed by not
+      drawing until a state has been shown.
+    pass:
+      - DT-01   # Edge and Windows Terminal, press and release drive the session
+      - DT-04   # Windows Terminal classified console=True; one line, nothing ran
+      - DT-21   # 3.9 s suppressed hold logged as one session
+    observed: >
+      Right Windows did not open the Start menu; the overlay appeared.
+      Three utterances: working set flat at 22 MB, handles 316 -> 302.
+      Press-to-capture 89-93 ms, first buffer 71-72 ms, as the C# build.
+    not_yet_run: [DT-02, DT-03, DT-08, DT-13, DT-14, DT-17, DT-18, DT-20, DT-23]
+
+  - date: 2026-10-19
+    build: rust-port, async device open, 3 s linger, reply guard, InputDevice
+    found_and_fixed:
+      - >
+        A tap followed quickly by a press blocked the UI thread for 909 ms
+        while the new device waited for the old one to close; the hook was
+        skipped and the Start menu opened. Devices now open off the UI thread.
+      - >
+        The one-word utterance "Explain" was answered by the cleanup model and
+        the answer typed. FR-11.12 now rejects such output.
+      - >
+        After a burst of taps the next press waited 1070 ms for audio. FR-9.5:
+        the device lingers 3 s and a press inside that window reuses it.
+    pass:
+      - DT-02   # three 170 ms taps discarded, pressToStart=0ms, no Start menu
+    observed: >
+      Logitech BRIO via InputDevice: first buffer 101-107 ms from a cold open;
+      text typed before the lingering device closed (delivery 10:08:31.85,
+      mic.close 10:08:33.23). Working set 26 MB, handles 388-397.
+    not_yet_run: [DT-03, DT-08, DT-13, DT-14, DT-15, DT-17, DT-18, DT-20, DT-23]

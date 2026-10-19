@@ -1,0 +1,6 @@
+# Link the C runtime into dictate.exe instead of depending on the Visual C++
+# redistributable. Without this a clean Windows machine refuses to start the
+# exe (vcruntime140.dll missing), which breaks FR-20.4: one file, nothing to
+# install.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

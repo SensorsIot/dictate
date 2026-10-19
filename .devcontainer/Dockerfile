@@ -12,13 +12,13 @@ RUN usermod -l dev -d /home/dev -m vscode \
 RUN rm -rf /home/*/.oh-my-zsh /root/.oh-my-zsh \
     && apt-get purge -y zsh && apt-get autoremove -y
 
-# Editing and git only. The .NET SDK is deliberately NOT installed — the
-# solution is built and tested by GitHub Actions (.github/workflows/), by
+# Editing and git only. The Rust toolchain is deliberately NOT installed — the
+# workspace is built and tested by GitHub Actions (.github/workflows/), by
 # explicit choice. Consequences, so nobody rediscovers them the hard way:
-#   * `dotnet build` / `dotnet test` do not exist here; failures surface on push.
-#   * The C# language server (ms-dotnettools.csharp) needs the SDK, so VS Code
-#     gives syntax highlighting but no IntelliSense in this container.
-# To change that, add the dotnet feature to devcontainer.json and rebuild.
+#   * `cargo build` / `cargo test` do not exist here; failures surface on push.
+#   * rust-analyzer needs the toolchain, so VS Code gives syntax highlighting
+#     but no type checking in this container.
+# To change that, add the rust feature to devcontainer.json and rebuild.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tmux \
         jq \

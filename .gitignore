@@ -2,16 +2,8 @@
 .claude-data/
 .claude/settings.local.json
 
-# .NET build output
-bin/
-obj/
-publish/
-*.user
-*.suo
-.vs/
-
 # Rust build output
-rust/target/
+target/
 
 # Local config / scratch
 *.local.json

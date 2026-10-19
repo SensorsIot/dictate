@@ -6,7 +6,7 @@ description = "Platform-free half of dictate: PCM in, deliverable text out."
 license = "MIT"
 publish = false
 
-# Platform-free on purpose, like Dictate.Core: CI compiles and tests this crate
+# Platform-free on purpose: CI compiles and tests this crate
 # on ubuntu-latest, so a Windows-only dependency here stops the build.
 
 [dependencies]

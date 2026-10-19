@@ -136,6 +136,7 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
     let (results_tx, results) = mpsc::channel();
 
     let started_fields = [
+        field("version", env!("CARGO_PKG_VERSION")),
         field("hotkey", format!("0x{:02X}", config.hotkey_virtual_key)),
         field("keepMicOpen", config.keep_microphone_open),
         field("input", resolve_input(config.input_device.as_deref()).1),

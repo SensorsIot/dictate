@@ -52,8 +52,8 @@ Most of dictate is not the happy path.
 
 1. Download `dictate.exe` from the
    [latest release](https://github.com/SensorsIot/dictate/releases/latest). It is
-   self-contained — no .NET runtime needed. Windows SmartScreen will warn about
-   an unsigned executable: *More info → Run anyway*.
+   one file with nothing to install. Windows SmartScreen will warn about an
+   unsigned executable: *More info → Run anyway*.
 2. Store your API keys (they go into Windows Credential Manager, encrypted under
    your account, never into a file):
 
@@ -75,18 +75,21 @@ Full instructions, settings and troubleshooting:
 
 ## Built with
 
-C# / .NET 9, shipped as one self-contained `win-x64` executable.
+Rust, shipped as one ~4 MB `win-x64` executable with nothing to install. About
+22 MB of memory while running.
 
 | Piece | What |
 |---|---|
-| `Dictate.Core` | Platform-free: the pipeline, prompt, sanitisation, degradation rules. Unit-tested on Linux in CI. |
-| `Dictate.Windows` | Every Win32 call: `WH_KEYBOARD_LL` hook, winmm capture, `SendInput`, Credential Manager, tray and overlay. |
-| [NAudio](https://github.com/naudio/NAudio) | Microphone capture |
-| [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-csharp) | The cleanup call |
+| `dictate-core` | Platform-free: the pipeline, prompt, sanitisation, degradation rules, config. Unit-tested on Linux in CI. |
+| `dictate-windows` | Every Win32 call, through [`windows-sys`](https://crates.io/crates/windows-sys): `WH_KEYBOARD_LL` hook, winmm capture, `SendInput`, Credential Manager, tray and overlay. |
+| [`reqwest`](https://crates.io/crates/reqwest) | The two HTTPS calls, to ElevenLabs and to the Anthropic Messages API |
 
 The split is deliberate: it keeps the whole testable half runnable on a Linux CI
-runner, and CI compiling `Dictate.Core` on ubuntu is what enforces it staying
+runner, and CI compiling `dictate-core` on ubuntu is what enforces it staying
 that way.
+
+Versions up to 0.1.21 were C# / .NET 9; the Rust port replaced them in 0.2.0.
+Settings and stored keys carry over unchanged.
 
 ## Documentation
 
@@ -99,7 +102,7 @@ that way.
 
 ## Status
 
-Working and in daily use. 71 automated tests, all passing; the pipeline,
+Working and in daily use. 75 automated tests, all passing; the pipeline,
 latency, memory behaviour and delivery paths have been measured on real
 hardware.
 

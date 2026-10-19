@@ -1,12 +1,12 @@
 name: CI
 
-# The only place this project is compiled. There is no .NET SDK in the
-# devcontainer (docs/decisions.md D-15), so a red build here is the first
-# notification that anything is wrong.
+# The only place this project is compiled. There is no Rust toolchain in the
+# devcontainer (Harness §1), so a red build here is the first notification
+# that anything is wrong.
 
 on:
   push:
-    branches: [main, rust-port]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -15,53 +15,22 @@ permissions:
 
 jobs:
   host-tests:
-    name: Host tier (Dictate.Core)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Restore
-        run: dotnet restore tests/Dictate.Core.Tests/Dictate.Core.Tests.csproj
-
-      # Running the core tests on Linux is what enforces FR-20.3: if a
-      # Windows-only dependency ever reaches Dictate.Core, this step stops
-      # compiling and the testable half of the project would otherwise have
-      # slipped out of CI unnoticed.
-      - name: Test
-        run: >
-          dotnet test tests/Dictate.Core.Tests/Dictate.Core.Tests.csproj
-          --configuration Release
-          --logger "trx;LogFileName=host-tests.trx"
-          --logger "console;verbosity=normal"
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: host-test-results
-          path: '**/TestResults/*.trx'
-          if-no-files-found: warn
-
-  rust-core:
-    name: Host tier (dictate-core, Rust port)
+    name: Host tier (dictate-core on Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # Same rule as Dictate.Core: compiling on Linux is what keeps the Rust
-      # core platform-free.
+      # Compiling and testing the core on Linux is what enforces FR-20.3: if a
+      # Windows-only dependency ever reaches dictate-core, this job stops, and
+      # the testable half of the project cannot quietly slip out of CI.
+      # dictate-windows builds here as a stub, so the whole workspace is checked.
       - name: Test
-        working-directory: rust
-        run: cargo test --all-targets
+        run: cargo test --workspace --all-targets
 
-  rust-windows:
-    name: Windows head builds (Rust port)
+  windows:
+    name: Windows build
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,34 +38,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build
-        working-directory: rust
         run: cargo build --release -p dictate-windows
 
       # The core again, on the platform it ships on.
       - name: Test core
-        working-directory: rust
         run: cargo test -p dictate-core
 
+      # Every push to main leaves a runnable exe, so a fix can be tried on the
+      # desktop without cutting a release.
       - name: Upload dictate.exe
         uses: actions/upload-artifact@v4
         with:
-          name: dictate-rust-exe
-          path: rust/target/release/dictate.exe
+          name: dictate-exe
+          path: target/release/dictate.exe
           if-no-files-found: error
-
-  compile-windows-head:
-    name: Windows head compiles
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      # Dictate.Windows sets EnableWindowsTargeting, so a Linux runner can
-      # restore and compile it even though it can never run it. This catches
-      # P/Invoke signature and WinForms errors on every push instead of at
-      # release time.
-      - name: Build solution
-        run: dotnet build dictate.sln --configuration Release

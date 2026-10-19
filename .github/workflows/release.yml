@@ -1,7 +1,7 @@
 name: Release
 
-# Tag v1.2.3 on main -> a self-contained dictate.exe attached to a GitHub
-# release. The version comes from the tag; nothing is hand-edited.
+# Tag v1.2.3 on main -> dictate.exe attached to a GitHub release. The version
+# comes from the tag; nothing is hand-edited.
 
 on:
   push:
@@ -22,9 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Determine version
         id: version
@@ -38,41 +36,42 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Building ${version}"
 
+      # Only the first `version =` line: the package's own. Later ones belong
+      # to dependencies.
+      - name: Stamp the version
+        shell: bash
+        run: |
+          sed -i "0,/^version = .*/s//version = \"${{ steps.version.outputs.version }}\"/" dictate-windows/Cargo.toml
+          grep -m1 '^version' dictate-windows/Cargo.toml
+
       # Host tests run on Linux in ci.yml, but a tag must not publish a build
       # whose core is broken — so they run here too before anything is packaged.
       - name: Test
-        run: dotnet test tests/Dictate.Core.Tests/Dictate.Core.Tests.csproj --configuration Release
+        run: cargo test -p dictate-core
 
-      - name: Publish
-        run: >
-          dotnet publish src/Dictate.Windows/Dictate.Windows.csproj
-          --configuration Release
-          --runtime win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:Version=${{ steps.version.outputs.version }}
-          --output publish
+      - name: Build
+        run: cargo build --release -p dictate-windows
 
       - name: Check the exe exists
         shell: bash
         run: |
-          test -f publish/dictate.exe || { echo "publish/dictate.exe missing"; ls -R publish; exit 1; }
-          echo "size: $(stat -c%s publish/dictate.exe) bytes"
+          test -f target/release/dictate.exe || { echo "target/release/dictate.exe missing"; exit 1; }
+          echo "size: $(stat -c%s target/release/dictate.exe) bytes"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dictate-${{ steps.version.outputs.version }}-win-x64
-          path: publish/dictate.exe
+          path: target/release/dictate.exe
 
       - name: Create release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: publish/dictate.exe
+          files: target/release/dictate.exe
           generate_release_notes: true
           body: |
-            Self-contained build — no .NET runtime required.
+            One executable, nothing to install.
 
             Download `dictate.exe`, then run `dictate.exe --auth` once to store
             your ElevenLabs and Anthropic keys in Windows Credential Manager.

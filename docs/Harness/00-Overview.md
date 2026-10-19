@@ -11,64 +11,68 @@ system must do — are in the [FSD](../Functionality/FSD.md) §1.4.
 
 | Choice | Rejected | Why |
 |---|---|---|
-| C# / .NET 9 | Python · Rust · Electron | The application is Win32 interop plus two HTTP calls. That is where Python is weakest — `ctypes` structs, third-party hook wrappers, PyInstaller against antivirus — and where C# is strongest. Ships as one self-contained exe with no runtime to install. |
-| `Dictate.Core` + `Dictate.Windows` in one repo | A single flat project · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
-| Builds only in GitHub Actions | The SDK in the devcontainer | The user's explicit choice, with the round-trip cost stated and accepted. See §1 — it shapes how you work here more than anything else. |
-| winmm (`WaveInEvent`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
-| Synthesised tones, output device closed after 30 s idle | Windows `SystemSounds` · holding the output open for the process lifetime | The chimes carry the wrong meaning — an error chime after every sentence trains you to ignore it. Holding the device open was worse: it kept dictate on the loudspeaker around the clock and stopped the endpoint idling, which turned out to be the real cause of an audio-interference bug that two theories about Windows ducking failed to explain. |
+| Rust, raw Win32 through `windows-sys` | C# / .NET 9 (shipped until 0.1.21) · Python · Electron | The application is Win32 interop plus two HTTP calls. C# did that well and shipped first; the Rust port replaced it on 2026-10-19 after running side by side on the desktop. It ships one ~4 MB exe with no runtime, idles at about a quarter of the memory (22 MB against 94 MB), and has no SDK whose surface can drift under a CI-only build. `windows-sys` rather than the `windows` crate: plain C signatures, checkable against the Win32 documentation without a compiler. |
+| `dictate-core` + `dictate-windows` in one Cargo workspace | A single crate · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
+| Builds only in GitHub Actions | A toolchain in the devcontainer | The user's explicit choice, with the round-trip cost stated and accepted. See §1 — it shapes how you work here more than anything else. |
+| winmm (`waveIn`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
+| One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. Found on the first desktop run of the Rust build. |
+| Messages posted to one window, state in a thread-local | Shared state behind locks | The hook, the capture threads and the pipeline worker never touch session state; they post to the main window and the work happens on the next pump. Anything that runs a modal loop — tray menu, key dialog, message box — is called with the state released, because it re-enters the window procedure. |
+| No audio cues | Synthesised tones | A second audio device cost more than the tones were worth: an idle output endpoint takes seconds to spin up, and opening it stalled capture. The overlay says the same thing instantly. |
 | An opt-in diagnostic log, metadata only | No log at all | Diagnosing a shipped binary from another machine meant reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. It records timings and counters, never dictated text, so FR-17.1 still holds. |
-| Batch upload, streaming deferred | Streaming transcription from the start | Correctness first, then measure. `ITranscriber` is the seam a streaming backend drops into without touching the pipeline. |
+| Plain HTTP for both APIs | The Anthropic SDK | There is no official Rust SDK, and two small JSON requests cost less to own than a client surface to track. The request body and response parsing are pure functions with host tests. |
+| Batch upload, streaming deferred | Streaming transcription from the start | Correctness first, then measure. `Transcriber` is the seam a streaming backend drops into without touching the pipeline. |
 
 ## 1. The constraint that shapes everything
 
-**There is no .NET SDK in the devcontainer.** This was the user's explicit choice
-(see §0) and it has consequences you will feel within ten minutes:
+**There is no Rust toolchain in the devcontainer or on the development
+machine.** This was the user's explicit choice (see §0) and it has consequences
+you will feel within ten minutes:
 
-- `dotnet build`, `dotnet test` and `dotnet run` do not exist locally.
-- A compile error is discovered by GitHub Actions, roughly 2–3 minutes after you
+- `cargo build`, `cargo test` and `cargo run` do not exist locally.
+- A compile error is discovered by GitHub Actions, roughly 3–5 minutes after you
   push.
-- VS Code gives you syntax highlighting but **no IntelliSense**, because the C#
-  language server needs the SDK.
+- No rust-analyzer: syntax highlighting, no type checking.
 
 Two habits follow, and they are not optional here:
 
-1. **Prefer APIs you can verify from documentation over ones you half-remember.**
-   A guessed method name costs a full CI round trip. Where the shape of an SDK
-   call is uncertain, reach for a BCL equivalent that cannot drift — the cleanup
-   timeout uses `Task.WaitAsync` rather than the Anthropic client's own timeout
-   property for exactly this reason.
+1. **Prefer API shapes you can verify from documentation over ones you
+   half-remember.** A guessed signature costs a full CI round trip. Where a
+   Win32 type is uncertain in `windows-sys` (a handle that is a pointer in one
+   version and an integer in another), initialise it with `std::mem::zeroed()`
+   and pass constants with `as _`, which compile either way.
 2. **Push compile-checkable changes in batches.** One push that fixes six
    plausible errors beats six pushes fixing one each.
 
-To reverse the decision, add the `dotnet` feature to `.devcontainer/devcontainer.json`
-and rebuild. Nothing else in the repository assumes its absence.
+CI uploads the release build of every push to `main` as the `dictate-exe`
+artifact, so a change can be tried on the desktop without a release.
 
 ## 2. Project layout
 
 ```
-src/Dictate.Core/      Platform-free. Compiles and is tested on Linux.
-src/Dictate.Windows/   Every Win32 call. net9.0-windows, WinExe.
-tests/Dictate.Core.Tests/   xunit, host tier.
+Cargo.toml          Workspace.
+dictate-core/       Platform-free. Compiles and is tested on Linux.
+dictate-windows/    Every Win32 call. Builds dictate.exe.
+.cargo/config.toml  Static C runtime, so the exe needs nothing installed.
 ```
 
-**The rule that keeps CI useful: `Dictate.Core` may not reference a Windows-only
-API.** It is enforced by the fact that CI builds and tests it on `ubuntu-latest`
-(FR-20.3) — break the rule and the build goes red, which is the point. If you
-find yourself wanting `System.Windows.Forms` in `Core`, the logic wants to move
-to `Windows`, or the Win32 part wants an interface in `Core`.
+**The rule that keeps CI useful: `dictate-core` may not reference a
+Windows-only API.** It is enforced by CI building and testing it on
+`ubuntu-latest` (FR-20.3) — break the rule and the build goes red, which is the
+point. If you find yourself wanting Win32 in the core, the logic wants to move
+to `dictate-windows`, or the Win32 part wants a trait in the core.
 
-`Dictate.Windows` sets `EnableWindowsTargeting` so a Linux runner can restore and
-compile it. It compiles there; it cannot run there.
+`dictate-windows` compiles on Linux as a stub `main`, with every Win32 module
+behind `#[cfg(windows)]`, so `cargo test --workspace` stays green there.
 
 ## 3. Seams, and why they exist
 
-| Interface | In `Core` | Exists so that |
+| Trait | In `dictate-core` | Exists so that |
 |---|---|---|
-| `ITranscriber` | yes | A streaming Scribe backend can replace the batch one without touching the pipeline (§0) |
-| `ICleaner` | yes | Cleanup can be swapped, benchmarked, or disabled entirely (`PassthroughCleaner`) |
+| `Transcriber` | yes | A streaming Scribe backend can replace the batch one without touching the pipeline (§0) |
+| `Cleaner` | yes | Cleanup can be swapped, benchmarked, or disabled entirely (`PassthroughCleaner`) |
 
 Both are the reason `DictationPipeline` is testable without a network. Add a new
-external dependency and it gets an interface in `Core` first.
+external dependency and it gets a trait in the core first.
 
 ## 4. Testing standard
 
@@ -76,19 +80,25 @@ external dependency and it gets an interface in `Core` first.
 
 | Tier | Where | When | What it can reach |
 |---|---|---|---|
-| `host` | `ubuntu-latest` | Every push | All of `Dictate.Core` |
-| `ci` | `windows-latest` | On tag | Compilation and publish only |
+| `host` | `ubuntu-latest`, and `windows-latest` again | Every push | All of `dictate-core` |
+| `ci` | `windows-latest` | Every push; release on tag | Compilation of `dictate-windows`, the exe |
 | `desktop` | The user's Windows 11 machine | By hand | Hotkey, microphone, `SendInput`, focus, tray |
 
 **The `desktop` tier is not automatable in this project's infrastructure**, and
 the documentation says so rather than implying a CI job that does not exist. It
 needs a real keyboard hook, a real microphone and a real foreground window.
 
+When something fails on the desktop, the crash dialog says little. What found
+the first Rust crash: run the exe under a small debugger, catch the access
+violation, and resolve the `user32.dll` frames against Microsoft's public
+symbol server. The diagnostic log (`EnableDiagnosticLog`) answers most other
+questions — `pressToStart`, `mic.firstBuffer`, `mic.close confirmed`.
+
 ### Writing a host test
 
-- One behaviour per test; the name states the behaviour, not the method.
-- Use the stubs in `PipelineTests` rather than mocking frameworks — there are two
-  interfaces and they have one method each.
+- One behaviour per test; the name states the behaviour, not the function.
+- Use the stubs in `tests/pipeline.rs` rather than a mocking crate — there are
+  two traits and they have one method each.
 - **Assert the prohibited outcome, not just the expected one.** `FR-6.4` is
   discharged by asserting the delivered text contains *no* newline; asserting it
   equals the happy-path string would pass while a newline slipped through in a
@@ -109,17 +119,20 @@ that reads finished while nothing is verified.
 
 ## 5. Conventions
 
-- Nullable reference types are on. Do not sprinkle `!` to silence them; if a value
-  can be null, the signature should say so.
-- `TreatWarningsAsErrors` is deliberately **off** — with CI-only builds, a warning
-  promoted to an error costs a round trip to discover.
+- `#![forbid(unsafe_code)]` in `dictate-core`. All `unsafe` lives in
+  `dictate-windows`, next to the Win32 call it exists for.
+- No `unwrap()` on anything that can fail at runtime in the Windows head; a
+  panic there costs the user's session. Window procedures and the hook catch
+  panics at the boundary so none unwinds into user32.
+- Warnings are not promoted to errors — with CI-only builds a promoted warning
+  costs a round trip to discover — but the build is kept at zero warnings.
 - Comments explain constraints the code cannot show — why `dwExtraInfo` is
-  stamped, why suppression defaults off, why cleanup has no `cache_control`. They
-  do not narrate the next line.
+  stamped, why the device opens off the UI thread, why cleanup has no
+  `cache_control`. They do not narrate the next line.
 - Match the surrounding style rather than importing a new one.
 
 ## 6. Release
 
-Tag `v*` on `main`. The workflow builds on `windows-latest`, publishes a
-self-contained single-file exe, and attaches it to a GitHub release. Version comes
-from the tag; nothing is hand-edited.
+Tag `v*` on `main`. The workflow stamps the tag's version into
+`dictate-windows/Cargo.toml`, runs the core tests, builds on `windows-latest`,
+and attaches `dictate.exe` to a GitHub release. Nothing is hand-edited.

@@ -129,13 +129,13 @@ decoder is an interface.
 
 | Layer | Components | Project |
 |---|---|---|
-| **L2** Application logic | Dictation session state machine · delivery policy · degradation policy | `Dictate.Core` + `Dictate.Windows` |
-| **L1** Interfaces | `ScribeTranscriber` · `HaikuCleaner` · `CleanupPrompt` · `TextSanitizer` · `Wav` · `AudioRecorder` · `HotkeyListener` · `TextInjector` · `WindowInspector` | mixed |
-| **L0** Foundation | `HttpClient` · Anthropic SDK · NAudio/winmm · Credential Manager · configuration file | mixed |
+| **L2** Application logic | Dictation session state machine · delivery policy · degradation policy | `dictate-core` + `dictate-windows` |
+| **L1** Interfaces | `ScribeTranscriber` · `HaikuCleaner` · `cleanup_prompt` · `text_sanitizer` · `wav` · `audio::Recorder` · `hotkey` · `injector` · `window_inspector` | mixed |
+| **L0** Foundation | `reqwest` · winmm · Credential Manager · configuration file | mixed |
 
 **The layer split is not the project split**, and conflating them is the mistake
-to avoid: `Dictate.Core` holds every layer's *platform-free* part, and
-`Dictate.Windows` every layer's *Win32* part. `Dictate.Core` shall not reference
+to avoid: `dictate-core` holds every layer's *platform-free* part, and
+`dictate-windows` every layer's *Win32* part. `dictate-core` shall not reference
 any Windows-only API (FR-20.3) — that is what keeps L1 and L2 testable on a Linux
 runner.
 
@@ -143,9 +143,9 @@ runner.
 
 | Tier | Runs where | Covers | Cost |
 |---|---|---|---|
-| **host** | `ubuntu-latest` in CI, every push | Everything in `Dictate.Core`: prompt construction, WAV framing, response parsing, sanitisation, pipeline degradation | Seconds |
+| **host** | `ubuntu-latest` in CI, every push | Everything in `dictate-core`: prompt construction, WAV framing, response parsing, sanitisation, pipeline degradation, configuration | Seconds |
 | **desktop** | The user's Windows 11 machine, manually | Hotkey capture, microphone, `SendInput`, focus pinning, tray and overlay, Credential Manager | Minutes, human in the loop |
-| **ci** | `windows-latest` in CI, on tag | The solution compiles and publishes a self-contained exe | Minutes |
+| **ci** | `windows-latest` in CI, every push; release on tag | The Windows head compiles; a tag publishes the exe | Minutes |
 
 Nothing in the **desktop** tier can be automated in this project's
 infrastructure: it needs a real keyboard hook, a real microphone and a real
@@ -159,10 +159,10 @@ exist.
 
 | Phase | Contents | Exit gate |
 |---|---|---|
-| **P1 Core** | `Dictate.Core` complete, host tier green | `dotnet test` passes in CI |
+| **P1 Core** | `dictate-core` complete, host tier green | `cargo test` passes in CI |
 | **P2 Client** | Hotkey, capture, injection, tray; end-to-end on the Windows machine | Journey (§1.3) passes manually |
 | **P3 Hardening** | Focus-change fallback, degradation paths, limits | Deviation and negative tests pass |
-| **P4 Release** | Tagged build publishing a self-contained exe | A downloaded exe runs on a machine with no .NET installed |
+| **P4 Release** | Tagged build publishing a self-contained exe | A downloaded exe runs on a clean Windows machine with nothing installed |
 
 ---
 
@@ -448,7 +448,7 @@ match, from the Windows default input. The device in use shall be logged.
 > Lets dictation use one microphone (the user's Logitech BRIO) without making
 > it the default for every other application. Resolved on every open, so a
 > device plugged in after startup is used from the next press. Implemented in
-> the Rust build only.
+> both builds' successor, the Rust build, from 0.2.0.
 
 **FR-9.5** [Must] `[user]` When `KeepMicrophoneOpen` is off, the capture device
 shall stay open for 3 s after a session ends and then close, unless a new
@@ -461,8 +461,8 @@ session's text shall not wait for the close.
 > (`mic.firstBuffer after=1070ms`). The cost is the Windows microphone
 > indicator staying lit 3 s longer after each dictation. *Must not:* text
 > delivered later than without the linger; the device still open 5 s after the
-> last session. *Tier:* desktop. Implemented in the Rust build; the C# build
-> closes on release.
+> last session. *Tier:* desktop. Since 0.2.0; the C# builds up to 0.1.21 closed
+> on release.
 
 ## 10. Transcription
 
@@ -533,8 +533,7 @@ FR-7.1: the raw transcript is delivered and the session marked degraded.
 > Please provide the speech-to-text output you'd like me to process." and was
 > typed into a terminal. Cleanup only removes and punctuates, so real output
 > never approaches the bound. *Must not:* a reply to the user delivered as
-> dictated text. *Tier:* host (`PipelineTests`). Implemented in the Rust core;
-> the C# core does not yet have it.
+> dictated text. *Tier:* host (`PipelineTests`). Since 0.2.0.
 
 **FR-11.6** [Must] `[user]` Terms listed in `Vocabulary` shall be spelled as
 configured.
@@ -742,22 +741,26 @@ fixed recent-utterance buffer.
 
 ## 20. Build and release
 
-**FR-20.1** [Must] `[user]` The solution shall build and its host-tier tests run
+**FR-20.1** [Must] `[user]` The workspace shall build and its host-tier tests run
 on `ubuntu-latest`.
 
 **FR-20.2** [Must] `[user]` A tagged commit shall publish a self-contained
 single-file `dictate.exe` for `win-x64` as a release asset.
 
-**FR-20.3** [Must] `[derived]` `Dictate.Core` shall not reference any Windows-only
+**FR-20.3** [Must] `[derived]` `dictate-core` shall not reference any Windows-only
 API.
 
-> **VC** — *Stimulus:* `dotnet test` on `ubuntu-latest`. *Expect:* restore, build
-> and all host tests pass. *Must not:* a platform-specific dependency creeping
-> into `Dictate.Core` — it would silently move the testable half out of CI.
+> **VC** — *Stimulus:* `cargo test --workspace` on `ubuntu-latest`. *Expect:*
+> build and all host tests pass. *Must not:* a platform-specific dependency
+> creeping into `dictate-core` — it would silently move the testable half out
+> of CI.
 > *Tier:* ci. *Evidence:* workflow run.
 
 **FR-20.4** [Must] `[derived]` The published exe shall run on a Windows 11 x64
-machine with no .NET runtime installed.
+machine with no runtime or redistributable installed.
+
+> The C runtime is linked statically (`.cargo/config.toml`); without it a clean
+> machine reports `vcruntime140.dll` missing.
 
 **FR-20.5** [Won't] `[user]` The published exe is not code-signed.
 
@@ -816,7 +819,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | **Pinned target** | The foreground window recorded at hotkey-down (FR-6.1) |
 | **Console target** | A window classified per FR-6.5, where newlines are forbidden |
 | **Degraded delivery** | Raw transcript delivered because cleanup failed (FR-7.1) |
-| **Host tier** | Tests running on a Linux CI runner against `Dictate.Core` |
+| **Host tier** | Tests running on a Linux CI runner against `dictate-core` |
 | **Desktop tier** | Tests requiring the real Windows machine, run by hand |
 
 ## Related
