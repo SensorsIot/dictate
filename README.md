@@ -50,6 +50,10 @@ Most of dictate is not the happy path.
 
 ## Install
 
+On a Mac: download `dictate-macos.zip` from the release, move `dictate.app` to
+Applications and open it — it asks for the keys and the permissions it needs,
+and the hotkey is Right Command. The rest of this section is Windows.
+
 1. Download `dictate.exe` from the
    [latest release](https://github.com/SensorsIot/dictate/releases/latest). It is
    one file with nothing to install. Windows SmartScreen will warn about an

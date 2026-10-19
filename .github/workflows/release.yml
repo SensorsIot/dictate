@@ -79,5 +79,61 @@ jobs:
 
             Hold **Right Windows**, speak, release.
 
+            **macOS:** download `dictate-macos.zip`, unzip, and move `dictate.app`
+            to Applications. On first start it asks for the keys (stored in the
+            login Keychain) and for Microphone, Accessibility and Input
+            Monitoring. Hold **Right Command**, speak, release.
+
             Windows SmartScreen will warn about an unsigned executable on first
             run: *More info -> Run anyway*.
+
+  publish-macos:
+    name: Publish macOS (universal)
+    # After the Windows job, so the release exists and this only adds a file.
+    needs: publish
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp the version
+        run: |
+          sed -i '' "1,/^version = .*/s//version = \"${{ steps.version.outputs.version }}\"/" Cargo.toml
+          grep -m1 '^version' Cargo.toml
+
+      - name: Test
+        run: cargo test -p dictate-core
+
+      - name: Build, sign and notarize dictate.app
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: bash dictate-macos/bundle/build-app.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictate-${{ steps.version.outputs.version }}-macos
+          path: target/dictate-macos.zip
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/dictate-macos.zip

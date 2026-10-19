@@ -14,6 +14,7 @@ mod error;
 pub mod model;
 pub mod pipeline;
 pub mod recent;
+pub mod resample;
 pub mod scribe;
 pub mod session;
 pub mod text_sanitizer;

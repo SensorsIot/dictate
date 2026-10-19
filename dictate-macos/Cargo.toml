@@ -1,0 +1,31 @@
+[package]
+name = "dictate-macos"
+description = "The macOS head of dictate: hotkey, microphone, menu bar, typing."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Not "dictate": the Windows head's binary has that name, and two in one
+# workspace collide in target/. The bundle renames it (bundle/build-app.sh).
+[[bin]]
+name = "dictate-macos"
+path = "src/main.rs"
+
+[dependencies]
+dictate-core = { path = "../dictate-core" }
+
+# CoreGraphics, CoreFoundation and Accessibility are called through hand-written
+# C declarations in ffi.rs, checkable against Apple's headers. The crates below
+# cover what has no small C surface: the menu-bar item, the run loop,
+# CoreAudio, the Keychain and notifications.
+[target.'cfg(target_os = "macos")'.dependencies]
+arboard = "3"
+cpal = "0.15"
+dispatch = "0.2"
+mac-notification-sys = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSResponder", "NSRunningApplication"] }
+security-framework = "3"
+tray-icon = "0.21"

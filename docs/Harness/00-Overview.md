@@ -62,6 +62,14 @@ to `dictate-windows`, or the Win32 part wants a trait in the core.
 
 `dictate-windows` compiles on Linux as a stub `main`, with every Win32 module
 behind `#[cfg(windows)]`, so `cargo test --workspace` stays green there.
+`dictate-macos` does the same behind `#[cfg(target_os = "macos")]`. Both heads
+implement `dictate_core::Platform`; the session itself is in the core.
+
+`dictate-macos` calls CoreGraphics, CoreFoundation and Accessibility through
+C declarations in `ffi.rs`, checkable against Apple's headers like
+`windows-sys` against Win32. Crates cover what has no small C surface: `cpal`
+(CoreAudio), `tray-icon` (menu bar), `dispatch` (the main queue),
+`security-framework` (Keychain), `mac-notification-sys`, `arboard`.
 
 ## 3. Seams, and why they exist
 
@@ -133,9 +141,20 @@ that reads finished while nothing is verified.
 ## 6. Release
 
 Tag `v*` on `main`. The workflow stamps the tag's version into the workspace
-`Cargo.toml` (both crates inherit it), runs the core tests, builds on
-`windows-latest`, and attaches `dictate.exe` to a GitHub release. Nothing is
-hand-edited.
+`Cargo.toml` (every crate inherits it), runs the core tests, builds on
+`windows-latest`, and attaches `dictate.exe` to a GitHub release; a second job
+on `macos-latest` attaches `dictate-macos.zip`. Nothing is hand-edited.
+
+`dictate-macos/bundle/build-app.sh` builds `dictate.app` for both
+architectures, joins them with `lipo`, and signs and notarizes the bundle when
+these GitHub Actions secrets are set: `MACOS_CERTIFICATE` (the Developer ID
+Application certificate, `.p12`, base64), `MACOS_CERTIFICATE_PASSWORD`,
+`APPLE_API_KEY` (App Store Connect API key, `.p8`, base64), `APPLE_API_KEY_ID`,
+`APPLE_API_ISSUER_ID`. They exist nowhere else: not in the repository, not in a
+log. Without them the bundle is signed ad hoc.
 
 `Cargo.lock` is committed, as for any Rust binary, and CI builds with
-`--locked`: a dependency changes only when someone changes it on purpose.
+`--locked`: a dependency changes only when someone changes it on purpose. With
+no cargo on any development machine, a new dependency is resolved by the
+`Lockfile` workflow, which runs on any branch push touching a `Cargo.toml` and
+uploads the updated `Cargo.lock` as the `cargo-lock` artifact to commit.

@@ -58,7 +58,7 @@ language, project split, build strategy, audio stack — is in
 
 | Uses | Not used | Why |
 |---|---|---|
-| Windows 11 client | Linux desktop · cross-platform · a service on the dev VM | The hotkey, the microphone and the target window all live there. A container on a headless VM has none of the three. |
+| Windows 11 and macOS clients, one shared core | A Linux desktop · a service on the dev VM | The hotkey, the microphone and the target window all live on the desktop the user types at. A container on a headless VM has none of the three. Everything above the operating system is shared (§2.3), so both clients behave the same; Part F lists where macOS differs. |
 | ElevenLabs Scribe | Local faster-whisper · Groq · Deepgram | A stated requirement (FR-10.1). The dev VM has 4 vCPUs and no GPU, so a local model there is not viable. |
 | Claude Haiku 4.5 for cleanup | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. |
 | Push-to-talk, hold | Toggle · toggle with silence auto-stop | Key release is an unambiguous end-of-utterance signal. No VAD, and no way to leave the microphone hot by accident. |
@@ -132,9 +132,10 @@ decoder is an interface.
 
 **The layer split is not the project split**, and conflating them is the mistake
 to avoid: `dictate-core` holds every layer's *platform-free* part, and
-`dictate-windows` every layer's *Win32* part. `dictate-core` shall not reference
-any Windows-only API (FR-20.3) — that is what keeps L1 and L2 testable on a Linux
-runner.
+`dictate-windows` and `dictate-macos` every layer's operating-system part.
+`dictate-core` shall not reference any platform-specific API (FR-20.3) — that is
+what keeps L1 and L2 testable on a Linux runner, and what makes the two clients
+behave the same.
 
 ### 2.4 Test architecture
 
@@ -776,8 +777,8 @@ on `ubuntu-latest`.
 **FR-20.2** [Must] `[user]` A tagged commit shall publish a self-contained
 single-file `dictate.exe` for `win-x64` as a release asset.
 
-**FR-20.3** [Must] `[derived]` `dictate-core` shall not reference any Windows-only
-API.
+**FR-20.3** [Must] `[derived]` `dictate-core` shall not reference any
+platform-specific API.
 
 > **VC** — *Stimulus:* `cargo test --workspace` on `ubuntu-latest`. *Expect:*
 > build and all host tests pass. *Must not:* a platform-specific dependency
@@ -811,12 +812,117 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 
 ---
 
+# Part F — macOS
+
+## 22. macOS client
+
+The macOS client runs the same session, delivery policy, pipeline and
+configuration as the Windows client; every requirement in Parts A–E applies
+unless this section replaces it. What follows is only where macOS differs.
+
+**FR-22.1** [Must] `[user]` The hotkey shall be read from `HotkeyVirtualKey` and
+mean the same physical key as on Windows: the Windows keys are Command, Alt is
+Option. The default `0x5C` is therefore **Right Command**. Modifiers (Command,
+Option, Ctrl, Shift, left or right) and F1–F20 are supported; any other value
+is a startup error naming the supported keys.
+
+> The user types on a Windows keyboard on both machines, so one config.json and
+> one finger position serve both. Right Command alone does nothing on macOS,
+> which is the property that makes Right Windows the default (§1.4).
+
+**FR-22.2** [Must] `[derived]` The hotkey shall be observed, never swallowed.
+FR-8.4 (`SuppressHotkey`) and FR-8.8 do not apply on macOS.
+
+> Right Command released with nothing pressed in between has no effect, so
+> there is nothing to suppress, and an observing tap needs only Input
+> Monitoring rather than control over the keyboard.
+
+**FR-22.3** [Must] `[derived]` A press whose release is never delivered shall be
+released once the hardware has read the key as up three times running, 100 ms
+apart, and logged with `reason=Reconciled`. A key still held shall never be
+released.
+
+> macOS stops delivering keystrokes to observers while a password field has
+> secure input, and disables an observer it considers slow; either can swallow
+> the release. This is FR-8.7's purpose, with the bound set by the watchdog
+> rather than the keyboard repeat rate.
+
+**FR-22.4** [Must] `[derived]` A press is recorded as `injected` when its event
+names a source process. dictate's own keystrokes carry a signature and are
+never read as hotkey events (FR-8.3).
+
+**FR-22.5** [Must] `[derived]` Capture shall use the input device's own format
+and convert it to the 16 kHz mono PCM16 of FR-9.1, averaging the channels and
+each output sample's input period. With `InputDevice` unset or unmatched, the
+system default input is used (FR-9.6).
+
+> The averaging keeps content above 8 kHz from folding into the speech band, at
+> no cost.
+
+**FR-22.6** [Must] `[derived]` Text shall be typed as keyboard events carrying
+Unicode strings of at most 20 UTF-16 units, never splitting a surrogate pair,
+with no modifier flags; a line break shall be typed as the Return key.
+Without the Accessibility permission, typing shall fail with a message naming
+the switch to turn on, and the text goes to the clipboard (FR-6.3).
+
+> macOS discards keystrokes posted by an application without Accessibility and
+> reports nothing; checking first is what turns a silent loss into FR-6.3's
+> clipboard fallback.
+
+**FR-22.7** [Must] `[derived]` The pinned target (FR-6.1) shall be the frontmost
+on-screen application window: its process and window number. A console is an
+application named in the built-in terminal list (Terminal, iTerm2, Warp,
+Ghostty, kitty, Alacritty, WezTerm) or in `ExtraConsoleProcesses`. The window
+title shall be read through Accessibility, and is empty without it.
+
+**FR-22.8** [Must] `[user]` FR-14.1's tray icon is a menu-bar item: a coloured
+dot per state, and a menu with **Recent**, **Microphone**, **Open config
+folder**, **Re-enter API keys…** and **Quit dictate**. Notifications appear in
+Notification Center. dictate has no Dock icon and no overlay on macOS.
+
+**FR-22.9** [Must] `[user]` API keys shall be stored in the login Keychain as
+generic passwords, service `dictate`, accounts `elevenlabs` and `anthropic`,
+and shall not be written to any file. They are entered in system dialogs with
+hidden input: at first start, through **Re-enter API keys…**, or with
+`dictate --auth`. FR-15.3 applies unchanged.
+
+**FR-22.10** [Must] `[derived]` Configuration is read from
+`~/Library/Application Support/dictate/config.json` and the diagnostic log is
+written to `~/Library/Logs/dictate/dictate.log`. FR-16.2 applies unchanged.
+
+**FR-22.11** [Must] `[derived]` dictate shall ask for each permission when it
+first needs it: Microphone at the first recording, Accessibility at startup,
+Input Monitoring when the hotkey observer cannot start. Without Input
+Monitoring, a notification says where to allow it, and dictate starts listening
+once it is allowed. The permissions held are logged at startup
+(`permissions`).
+
+**FR-22.12** [Must] `[derived]` FR-5.4 holds through a lock file in the
+configuration folder; the system releases it when dictate exits, however it
+exits.
+
+**FR-22.13** [Must] `[user]` A tagged commit shall also publish
+`dictate-macos.zip`: `dictate.app`, one universal binary for Apple Silicon and
+Intel, signed with the Developer ID and notarized. The signing certificate and
+the notarization key exist only as GitHub Actions secrets. A build without them
+is signed ad hoc and runs, but macOS asks for its permissions again after every
+such build.
+
+> FR-20.5 is Windows-only: a notarized application opens without a warning,
+> and an unsigned one downloaded from the web does not open at all until the
+> user overrides Gatekeeper.
+
+**FR-22.14** [Won't] `[derived]` dictate offers no start-at-login option on
+macOS; **System Settings → General → Login Items** starts it at login.
+
+---
+
 ## Appendix A — Configuration catalogue
 
 | Key | Type | Default | Requirement |
 |---|---|---|---|
-| `HotkeyVirtualKey` | int | `0x5C` (Right Windows) | FR-8.1 |
-| `SuppressHotkey` | bool | `true` | FR-8.4 |
+| `HotkeyVirtualKey` | int | `0x5C` (Right Windows; Right Command on macOS) | FR-8.1, FR-22.1 |
+| `SuppressHotkey` | bool | `true` (no effect on macOS) | FR-8.4 |
 | `IgnoreInjectedHotkey` | bool | `false` | FR-8.6 |
 | `MinimumHoldMs` | int | `300` | FR-5.2 |
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
@@ -833,7 +939,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `AppendSpaceAfterInsert` | bool | `true` | FR-6.4 |
 | `SilenceThreshold` | int | `200` | FR-9.3 |
 | `KeepMicrophoneOpen` | bool | `false` | FR-9.2 |
-| `InputDevice` | string? | `null` (Windows default) | FR-9.6 |
+| `InputDevice` | string? | `null` (the system default input) | FR-9.6 |
 | `EnableDiagnosticLog` | bool | `false` | — |
 | `OverlayPosition` | enum | `BottomRight` | FR-14.2 |
 | `InjectionChunkSize` | int | `200` | FR-12.3 |

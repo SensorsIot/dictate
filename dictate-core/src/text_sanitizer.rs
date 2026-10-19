@@ -10,6 +10,7 @@ use crate::model::TargetContext;
 const KNOWN_CONSOLE_PROCESSES: &[&str] = &[
     "wezterm-gui", "wezterm", "windowsterminal", "openconsole", "conhost",
     "cmd", "powershell", "pwsh", "putty", "kitty", "alacritty", "mintty",
+    "terminal", "iterm2", "warp", "ghostty",
 ];
 
 pub fn looks_like_console(process_name: &str, extra: &[String]) -> bool {

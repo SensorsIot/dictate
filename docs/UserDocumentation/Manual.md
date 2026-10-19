@@ -39,6 +39,31 @@ Nothing is saved. No audio file, no transcript, no history on disk.
 silently fail to type into ordinary applications — Windows does not let an
 elevated process send keystrokes to unelevated windows.
 
+### On a Mac
+
+1. Download `dictate-macos.zip` from the same release, unzip it, and move
+   `dictate.app` to **Applications**. It runs on Apple Silicon and Intel.
+2. Open it. It asks for the **ElevenLabs** and **Anthropic** keys and stores
+   them in your login Keychain, never in a file. **Re-enter API keys…** in its
+   menu, or `dictate.app/Contents/MacOS/dictate --auth`, asks again.
+3. Allow what macOS asks for, in **System Settings → Privacy & Security**:
+   - **Accessibility** — to type the text and read window titles.
+   - **Input Monitoring** — to see the hotkey. dictate starts listening as soon
+     as it is switched on.
+   - **Microphone** — asked at the first dictation.
+4. dictate is the dot in the menu bar: grey idle, red recording, blue
+   transcribing. It has no Dock icon and no on-screen indicator.
+5. To start it at login, add it under **System Settings → General → Login
+   Items**.
+
+The hotkey is **Right Command** — the right Windows key on a Windows keyboard.
+`HotkeyVirtualKey` uses the Windows key codes on both systems, so one
+config.json means the same key on each; on a Mac it lives in
+`~/Library/Application Support/dictate/`, and the log in
+`~/Library/Logs/dictate/`. The Mac supports the modifier keys and F1–F20 as
+hotkeys; `SuppressHotkey` has no effect there, because the Mac hotkey is never
+swallowed.
+
 ## 3. Everyday use
 
 Hold **Right Windows**, speak, release.

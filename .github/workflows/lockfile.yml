@@ -1,0 +1,35 @@
+name: Lockfile
+
+# There is no cargo on any development machine, so a dependency added to a
+# Cargo.toml cannot be resolved locally. On a branch, this resolves it and
+# offers the updated Cargo.lock as an artifact to commit; CI builds with
+# --locked and stays red until that is done.
+
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['**/Cargo.toml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Adds what is missing and leaves every existing entry as it is.
+      - name: Resolve
+        run: |
+          cargo metadata --format-version 1 > /dev/null
+          git diff --stat Cargo.lock
+
+      - name: Upload Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: Cargo.lock

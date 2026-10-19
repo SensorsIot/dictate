@@ -1,5 +1,5 @@
 [workspace]
-members = ["dictate-core", "dictate-windows"]
+members = ["dictate-core", "dictate-windows", "dictate-macos"]
 resolver = "2"
 
 # One version for the whole workspace. The release workflow stamps the tag's

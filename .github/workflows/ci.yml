@@ -25,7 +25,7 @@ jobs:
       # Compiling and testing the core on Linux is what enforces FR-20.3: if a
       # Windows-only dependency ever reaches dictate-core, this job stops, and
       # the testable half of the project cannot quietly slip out of CI.
-      # dictate-windows builds here as a stub, so the whole workspace is checked.
+      # The platform heads build here as stubs, so the whole workspace is checked.
       - name: Test
         run: cargo test --workspace --all-targets --locked
 
@@ -51,4 +51,37 @@ jobs:
         with:
           name: dictate-exe
           path: target/release/dictate.exe
+          if-no-files-found: error
+
+  macos:
+    name: macOS build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Test core
+        run: cargo test -p dictate-core --locked
+
+      # Signed and notarized when the Developer ID secrets are set, so the
+      # artifact runs like a release; ad-hoc signed otherwise (pull requests
+      # from forks never see the secrets).
+      - name: Build dictate.app
+        env:
+          LOCKED: 1
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: bash dictate-macos/bundle/build-app.sh "$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+
+      - name: Upload dictate.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictate-macos
+          path: target/dictate-macos.zip
           if-no-files-found: error
