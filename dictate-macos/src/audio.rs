@@ -12,7 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{FromSample, Sample, SampleFormat, SizedSample};
+use cpal::{FromSample, SampleFormat, SizedSample};
 use dictate_core::resample::Downsampler;
 use dictate_core::wav;
 

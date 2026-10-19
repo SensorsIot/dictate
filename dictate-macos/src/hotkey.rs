@@ -155,6 +155,7 @@ fn handle(kind: CGEventType, event: CGEventRef) {
         return;
     }
 
+    #[allow(non_upper_case_globals)] // Apple's constant names, matched as patterns
     let pressed = match kind {
         kCGEventFlagsChanged => flags & FLAG.load(Ordering::SeqCst) != 0,
         // Auto-repeat arrives as further key-downs; DOWN is already set, so
