@@ -16,6 +16,7 @@ pub const WM_RECORDER_FIRST_BUFFER: u32 = WM_APP + 5;
 pub const WM_RECORDER_CLOSED: u32 = WM_APP + 6;
 pub const WM_PIPELINE_DONE: u32 = WM_APP + 7;
 pub const WM_TRAY: u32 = WM_APP + 8;
+pub const WM_RECORDER_OPEN_FAILED: u32 = WM_APP + 9;
 
 /// NUL-terminated UTF-16, for every `PCWSTR` parameter.
 pub fn wide(text: &str) -> Vec<u16> {

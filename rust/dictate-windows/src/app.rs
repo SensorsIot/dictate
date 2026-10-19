@@ -36,7 +36,7 @@ use crate::overlay::{Overlay, SessionState};
 use crate::tray::{self, MenuChoice, Tray};
 use crate::win::{
     instance, message_box, wide, SendHwnd, WM_HOTKEY_DOWN, WM_HOTKEY_REJECTED, WM_HOTKEY_UP, WM_PIPELINE_DONE,
-    WM_RECORDER_CLOSED, WM_RECORDER_FIRST_BUFFER, WM_RECORDER_LIMIT, WM_TRAY,
+    WM_RECORDER_CLOSED, WM_RECORDER_FIRST_BUFFER, WM_RECORDER_LIMIT, WM_RECORDER_OPEN_FAILED, WM_TRAY,
 };
 use crate::{auth, clipboard, hotkey, injector, paths, window_inspector};
 
@@ -117,6 +117,7 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
                     notify_window.post(WM_RECORDER_FIRST_BUFFER, after.as_millis() as usize, 0)
                 }
                 RecorderEvent::DeviceClosed(confirmed) => notify_window.post(WM_RECORDER_CLOSED, confirmed as usize, 0),
+                RecorderEvent::OpenFailed => notify_window.post(WM_RECORDER_OPEN_FAILED, 0, 0),
             };
         }),
     );
@@ -302,6 +303,9 @@ fn handle(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LR
         WM_RECORDER_CLOSED => {
             with_app(|app| app.log.event("mic.close", &[field("confirmed", wparam != 0)]));
         }
+        WM_RECORDER_OPEN_FAILED => {
+            with_app(App::on_open_failed);
+        }
         WM_PIPELINE_DONE => {
             with_app(App::finish_session);
         }
@@ -390,10 +394,9 @@ impl App {
         self.pinned_window = window_inspector::foreground();
         self.pressed_at = hotkey::pressed_at().unwrap_or_else(Instant::now);
 
-        if let Err(error) = self.recorder.start() {
-            self.tray.notify("Could not start recording", &error);
-            return;
-        }
+        // Returns at once: the device opens off this thread, because this
+        // thread also runs the keyboard hook. See audio.rs.
+        self.recorder.start();
 
         let latency = self.pressed_at.elapsed();
         self.set_state(SessionState::Recording);
@@ -403,11 +406,24 @@ impl App {
         self.log.event(
             "recording.start",
             &[
-                field("pressToCapture", latency),
+                field("pressToStart", latency),
                 field("injected", origin & hotkey::ORIGIN_INJECTED != 0),
                 field("lowerIL", origin & hotkey::ORIGIN_LOWER_INTEGRITY != 0),
             ],
         );
+    }
+
+    /// The recorder could not open a device for the session in progress and
+    /// has already ended its side of it.
+    fn on_open_failed(&mut self) {
+        let error = self.recorder.take_open_error().unwrap_or_else(|| "Unknown error.".into());
+        self.log.event("mic.openFailed", &[field("error", error.as_str())]);
+
+        if self.state == SessionState::Recording {
+            self.set_state(SessionState::Idle);
+        }
+
+        self.tray.notify("Could not start recording", &error);
     }
 
     fn end_session(&mut self, reason: StopReason) {

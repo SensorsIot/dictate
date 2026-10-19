@@ -13,6 +13,15 @@
 //! but the capture thread ever touches the handle, and it closes only after
 //! waveInReset has returned every buffer.
 //!
+//! **The UI thread never waits for a device.** It also runs the keyboard hook,
+//! and Windows skips a hook that does not answer within LowLevelHooksTimeout.
+//! Opening a device can take a second when the previous one is still closing —
+//! a quick second press after a tap — and while the UI thread waited, the
+//! hotkey's key-up went straight to the system: the Start menu opened, and the
+//! session ended by reconciliation with no audio. So `start` only marks the
+//! session; the device is opened on a background thread and kept only if the
+//! session that asked for it is still running.
+//!
 //! Two modes, because opening a capture device costs real time:
 //!   * default — open on press, close on release. The microphone indicator is
 //!     only lit while recording.
@@ -53,6 +62,9 @@ pub enum RecorderEvent {
     /// A device was closed; false if waveInClose reported failure, which is the
     /// signature of a handle Windows still considers in use.
     DeviceClosed(bool),
+    /// The device for the current session could not be opened. The session has
+    /// been ended; `take_open_error` says why.
+    OpenFailed,
 }
 
 pub type Notify = Arc<dyn Fn(RecorderEvent) + Send + Sync>;
@@ -63,12 +75,16 @@ struct Capture {
     capped: bool,
     first_seen: bool,
     started: Instant,
+    /// Incremented by every `start`, so a device that finishes opening after
+    /// its session ended can tell it is no longer wanted.
+    session: u64,
 }
 
 struct Inner {
     // Lock order: device before capture. The capture thread takes only capture.
     device: Mutex<Option<Device>>,
     capture: Mutex<Capture>,
+    open_error: Mutex<Option<String>>,
     notify: Notify,
     keep_open: bool,
     max_bytes: usize,
@@ -94,7 +110,9 @@ impl Recorder {
                     capped: false,
                     first_seen: false,
                     started: Instant::now(),
+                    session: 0,
                 }),
+                open_error: Mutex::new(None),
                 notify,
                 keep_open,
                 max_bytes: maximum_seconds.max(1) as usize * bytes_per_second,
@@ -117,7 +135,7 @@ impl Recorder {
         let inner = Arc::clone(&self.inner);
         thread::spawn(move || {
             if inner.keep_open {
-                let _ = Inner::ensure_open(&inner);
+                Inner::open_for(&inner, None);
             } else if let Ok(device) = Device::open(Weak::new(), Arc::clone(&inner.notify)) {
                 // Pre-warming is an optimisation. If the device refuses now it
                 // reports the real error on the first press, where there is a
@@ -127,20 +145,34 @@ impl Recorder {
         });
     }
 
-    pub fn start(&self) -> Result<(), String> {
-        if lock(&self.inner.capture).recording {
-            return Ok(());
+    /// Starts a session. Returns at once; the device opens in the background
+    /// and audio counts from its first buffer.
+    pub fn start(&self) {
+        let session = {
+            let mut capture = lock(&self.inner.capture);
+            if capture.recording {
+                return;
+            }
+            capture.session += 1;
+            capture.buffer = Vec::with_capacity(self.inner.max_bytes.min(32_000 * 30));
+            capture.capped = false;
+            capture.first_seen = false;
+            capture.started = Instant::now();
+            capture.recording = true;
+            capture.session
+        };
+
+        if lock(&self.inner.device).is_some() {
+            return; // keep-open mode, already running
         }
 
-        Inner::ensure_open(&self.inner)?;
+        let inner = Arc::clone(&self.inner);
+        thread::spawn(move || Inner::open_for(&inner, Some(session)));
+    }
 
-        let mut capture = lock(&self.inner.capture);
-        capture.buffer = Vec::with_capacity(self.inner.max_bytes.min(32_000 * 30));
-        capture.capped = false;
-        capture.first_seen = false;
-        capture.started = Instant::now();
-        capture.recording = true;
-        Ok(())
+    /// Why the last `OpenFailed` happened.
+    pub fn take_open_error(&self) -> Option<String> {
+        lock(&self.inner.open_error).take()
     }
 
     /// Stops recording and returns the captured PCM.
@@ -183,12 +215,39 @@ impl Drop for Recorder {
 }
 
 impl Inner {
-    fn ensure_open(inner: &Arc<Inner>) -> Result<(), String> {
-        let mut device = lock(&inner.device);
-        if device.is_none() {
-            *device = Some(Device::open(Arc::downgrade(inner), Arc::clone(&inner.notify))?);
+    /// Opens a device on the calling (background) thread and keeps it only if
+    /// it is still wanted: in keep-open mode always, otherwise only while the
+    /// session that asked for it is recording. No lock is held while opening,
+    /// so `stop` on the UI thread never waits for it.
+    fn open_for(inner: &Arc<Inner>, session: Option<u64>) {
+        match Device::open(Arc::downgrade(inner), Arc::clone(&inner.notify)) {
+            Ok(device) => {
+                let mut slot = lock(&inner.device);
+                let wanted = slot.is_none()
+                    && (inner.keep_open || {
+                        let capture = lock(&inner.capture);
+                        capture.recording && Some(capture.session) == session
+                    });
+
+                if wanted {
+                    *slot = Some(device);
+                } else {
+                    drop(slot);
+                    device.close(false);
+                }
+            }
+            Err(error) => {
+                let mut capture = lock(&inner.capture);
+                if session.is_some() && capture.recording && Some(capture.session) == session {
+                    capture.recording = false;
+                    capture.buffer = Vec::new();
+                    drop(capture);
+
+                    *lock(&inner.open_error) = Some(error);
+                    (inner.notify)(RecorderEvent::OpenFailed);
+                }
+            }
         }
-        Ok(())
     }
 
     /// Called on the capture thread for every filled buffer.
