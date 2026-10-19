@@ -136,6 +136,15 @@ fn the_user_prompt_carries_the_transcript_and_the_window() {
 }
 
 #[test]
+fn the_transcript_is_delimited_and_replies_are_forbidden() {
+    let prompt = build_user("ok", &TargetContext::unknown());
+    let system = build_system(&DictateConfig::default());
+
+    assert!(prompt.contains("<transcript>\nok\n</transcript>"));
+    assert!(system.contains("Reply to the user, ask for input"));
+}
+
+#[test]
 fn a_console_target_asks_for_a_single_line() {
     let prompt = build_user("git status", &TargetContext::new("wezterm-gui", "dev-1", true));
 

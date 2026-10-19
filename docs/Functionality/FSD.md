@@ -496,6 +496,18 @@ language spoken, including where two languages are mixed in one sentence.
 **FR-11.5** [Must] `[user]` Cleanup shall not answer, explain, summarise or
 continue the transcript.
 
+**FR-11.12** [Must] `[derived]` A cleanup result longer than twice the raw
+transcript plus 20 characters shall be treated as a cleanup failure under
+FR-7.1: the raw transcript is delivered and the session marked degraded.
+
+> FR-11.5 enforced structurally, because a prompt cannot guarantee it. On
+> 2026-10-19 a one-second fragment came back as "I have no transcript to clean.
+> Please provide the speech-to-text output you'd like me to process." and was
+> typed into a terminal. Cleanup only removes and punctuates, so real output
+> never approaches the bound. *Must not:* a reply to the user delivered as
+> dictated text. *Tier:* host (`PipelineTests`). Implemented in the Rust core;
+> the C# core does not yet have it.
+
 **FR-11.6** [Must] `[user]` Terms listed in `Vocabulary` shall be spelled as
 configured.
 

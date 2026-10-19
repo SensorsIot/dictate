@@ -21,6 +21,9 @@ pub fn build_system(config: &DictateConfig) -> String {
         "Never:".into(),
         "- Translate. Reply in the language that was spoken, even if the two are mixed in one sentence.".into(),
         "- Answer, explain, summarise, or continue the text. You are not being asked a question.".into(),
+        "- Reply to the user, ask for input, or comment on the transcript — even if it is a single word, \
+         a fragment, or looks incomplete. A fragment is cleaned like anything else."
+            .into(),
         "- Add greetings, sign-offs, quotation marks, or markdown the user did not speak.".into(),
         "- Change the meaning, reorder the argument, or make it more formal.".into(),
         String::new(),
@@ -65,7 +68,10 @@ pub fn build_user(transcript: &str, target: &TargetContext) -> String {
         prompt.push('\n');
     }
 
-    prompt.push_str("Transcript:\n");
+    // Delimited, so a fragment cannot be mistaken for the instructions
+    // around it.
+    prompt.push_str("Transcript:\n<transcript>\n");
     prompt.push_str(transcript);
+    prompt.push_str("\n</transcript>");
     prompt
 }

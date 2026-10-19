@@ -98,6 +98,33 @@ fn cleanup_returning_nothing_is_treated_as_a_failure_not_a_deletion() {
 }
 
 #[test]
+fn a_reply_instead_of_a_cleanup_is_never_delivered() {
+    // What the first desktop run of the Rust build actually typed into a
+    // terminal, for a one-second fragment.
+    let pipeline = build(
+        StubTranscriber::ok("Okay."),
+        StubCleaner::ok("I have no transcript to clean. Please provide the speech-to-text output you'd like me to process."),
+    );
+
+    let result = pipeline.process(&some_audio(), &TargetContext::unknown());
+
+    assert_eq!(result.status, UtteranceStatus::CleanupFailed);
+    assert_eq!(result.text, "Okay.");
+    assert!(!result.text.contains("transcript"));
+}
+
+#[test]
+fn ordinary_cleanup_growth_is_accepted() {
+    // Capitalisation and punctuation make short utterances a little longer.
+    let pipeline = build(StubTranscriber::ok("ok"), StubCleaner::ok("Okay."));
+
+    let result = pipeline.process(&some_audio(), &TargetContext::unknown());
+
+    assert_eq!(result.status, UtteranceStatus::Ok);
+    assert_eq!(result.text, "Okay.");
+}
+
+#[test]
 fn swiss_spelling_applies_to_cleaned_and_fallback_text() {
     let cleaned = build(StubTranscriber::ok("die strasse"), StubCleaner::ok("Die Straße ist groß."))
         .process(&some_audio(), &TargetContext::unknown());

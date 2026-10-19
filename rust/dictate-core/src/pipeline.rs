@@ -8,6 +8,14 @@ use crate::scribe::Transcriber;
 use crate::text_sanitizer;
 use crate::wav;
 
+/// Cleanup removes fillers and adds punctuation; it never makes an utterance
+/// much longer. Output beyond twice the input plus a little slack is not a
+/// cleanup of it — in practice it is the model talking to the user, which on
+/// the first desktop run happened for a one-second fragment (FR-11.12).
+pub fn is_plausible_cleanup(raw: &str, cleaned: &str) -> bool {
+    cleaned.chars().count() <= raw.chars().count() * 2 + 20
+}
+
 /// PCM in, deliverable text out.
 ///
 /// Degradation policy, in order of preference:
@@ -68,6 +76,13 @@ impl DictationPipeline {
             // An empty cleanup result means the model dropped the utterance —
             // treat that as a failure of cleanup, not as a silent deletion.
             Ok(cleaned) if cleaned.is_empty() => (transcript.text.clone(), Some("Cleanup returned nothing.".to_owned())),
+            // FR-11.5, enforced rather than requested: a model that answers a
+            // fragment ("I have no transcript to clean…") must not have its
+            // answer typed into the user's window.
+            Ok(cleaned) if !is_plausible_cleanup(&transcript.text, &cleaned) => (
+                transcript.text.clone(),
+                Some("Cleanup replied instead of cleaning; the transcript was delivered as spoken.".to_owned()),
+            ),
             Ok(cleaned) => (cleaned, None),
             Err(error) => (transcript.text.clone(), Some(format!("Cleanup failed: {error}"))),
         };
