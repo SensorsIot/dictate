@@ -243,7 +243,7 @@ tests:
     verifies: [FR-9.1, FR-22.5]
     must_not: a 12 kHz tone surviving decimation at full scale
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39298316776, 2026-10-19
 
   # ---- host tier: Scribe request and configuration ---------------------------
 
@@ -313,7 +313,10 @@ tests:
     verifies: [FR-22.13]
     must_not: a signing certificate or key written to the repository or a log
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39298316776, 2026-10-19, zero warnings
+    gap: >
+      Built and ad-hoc signed: the signing secrets were not yet set, so the
+      Developer ID signature and notarization path has not run.
 
   # ---- macOS desktop tier (the user's Mac, by hand) ---------------------------
 
