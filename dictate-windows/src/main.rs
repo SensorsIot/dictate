@@ -23,6 +23,8 @@ mod overlay;
 #[cfg(windows)]
 mod paths;
 #[cfg(windows)]
+mod start_guard;
+#[cfg(windows)]
 mod tray;
 #[cfg(windows)]
 mod win;

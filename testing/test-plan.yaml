@@ -634,6 +634,24 @@ tests:
       "dictate" message box; closed, it exited with code 0; one dictate process
       remained and the log gained no started line.
 
+  - id: DT-26
+    name: The hotkey in an administrator window closes Start and explains
+    kind: atomic
+    scenario: deviation
+    tier: desktop
+    verifies: [FR-8.8]
+    must_not: closing a Start menu opened from an ordinary window or by a click
+    oracle: >
+      start.closed ok=True in the log, the Start menu gone, and the
+      "Administrator window" notification shown
+    steps: >
+      Press and release the hotkey in an administrator PowerShell. Then, as the
+      negative: press the other Windows key in an ordinary window, and click
+      the Start button while the administrator window has focus — Start must
+      stay open both times and the log gain no start.closed.
+    status: implemented
+    last_result: never_run
+
   # ---- workflow: the acceptance gate -----------------------------------------
 
   - id: W-01

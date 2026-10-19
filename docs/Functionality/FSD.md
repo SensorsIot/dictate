@@ -428,6 +428,20 @@ that is still held shall never be treated as released.
 > *Must not:* the hold fragmenting into repeated sessions discarded as taps.
 > *Tier:* desktop.
 
+**FR-8.8** [Should] `[user]` When the hotkey is a Windows key and the Start menu
+takes the foreground directly from a window running as administrator, dictate
+shall close it and say why it cannot hear the hotkey there.
+
+> The hook never sees a press in an elevated window, so the key is not
+> suppressed and its release opens Start. The key itself is invisible to
+> dictate there (the async key state reads up throughout, measured
+> 2026-10-19); only the Start menu arriving is visible. That cannot tell the
+> two Windows keys apart, so the other one, pressed on purpose in an elevated
+> window, is closed as well — the user's decision, preferred over leaving Start
+> open beside the message. A click on the Start button is exempt: the cursor is
+> on the taskbar. *Must not:* closing a Start menu opened from an ordinary
+> window. *Tier:* desktop.
+
 ## 9. Audio capture
 
 **FR-9.1** [Must] `[derived]` Captured audio shall be 16 kHz, mono, 16-bit PCM.

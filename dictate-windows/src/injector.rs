@@ -34,6 +34,29 @@ pub fn type_text(text: &str, chunk_size: i32, chunk_delay_ms: i32) -> Result<(),
     Ok(())
 }
 
+/// One tap of a virtual key, stamped like everything else we send. Returns
+/// whether Windows accepted both events.
+pub fn tap_key(virtual_key: u16) -> bool {
+    let inputs = [virtual_key_event(virtual_key, false), virtual_key_event(virtual_key, true)];
+    let sent = unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), size_of::<INPUT>() as i32) };
+    sent as usize == inputs.len()
+}
+
+fn virtual_key_event(virtual_key: u16, up: bool) -> INPUT {
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: virtual_key,
+                wScan: 0,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { 0 },
+                time: 0,
+                dwExtraInfo: INJECTION_SIGNATURE,
+            },
+        },
+    }
+}
+
 fn send_chunk(chunk: &[u16]) -> Result<(), String> {
     // Two events per UTF-16 code unit: down then up. Code units rather than
     // chars on purpose — a surrogate pair must go as two events, which is

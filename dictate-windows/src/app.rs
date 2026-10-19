@@ -36,14 +36,21 @@ use crate::overlay::{Overlay, SessionState};
 use crate::tray::{self, MenuChoice, Tray};
 use crate::win::{
     instance, message_box, wide, SendHwnd, WM_HOTKEY_DOWN, WM_HOTKEY_REJECTED, WM_HOTKEY_UP, WM_PIPELINE_DONE,
-    WM_RECORDER_CLOSED, WM_RECORDER_FIRST_BUFFER, WM_RECORDER_LIMIT, WM_RECORDER_OPEN_FAILED, WM_TRAY,
+    WM_RECORDER_CLOSED, WM_RECORDER_FIRST_BUFFER, WM_RECORDER_LIMIT, WM_RECORDER_OPEN_FAILED, WM_START_FROM_ELEVATED,
+    WM_TRAY,
 };
-use crate::{auth, autostart, clipboard, hotkey, injector, paths, window_inspector};
+use crate::{auth, autostart, clipboard, hotkey, injector, paths, start_guard, window_inspector};
 
 /// How many delivered utterances stay recoverable. In memory only (FR-17.2).
 const RECENT_CAPACITY: usize = 5;
 
 const TIMER_RECONCILE: usize = 1;
+const TIMER_START_RECHECK: usize = 2;
+
+/// Long enough for the Start menu's opening animation to have finished.
+const START_RECHECK_MS: u32 = 400;
+
+const VK_ESCAPE: u16 = 0x1B;
 
 /// Why capture ended. Recorded on every `recording.stop`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -179,6 +186,7 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
     };
 
     unsafe { SetTimer(hwnd, TIMER_RECONCILE, hotkey::RECONCILE_INTERVAL_MS, None) };
+    start_guard::install(hotkey_key, hwnd);
 
     let mut fields: Vec<_> = started_fields.into_iter().collect();
     fields.push(field("graceInitial", graces.initial));
@@ -198,9 +206,11 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
 }
 
 fn teardown(hwnd: HWND) {
+    start_guard::uninstall();
     hotkey::uninstall();
     unsafe {
         KillTimer(hwnd, TIMER_RECONCILE);
+        KillTimer(hwnd, TIMER_START_RECHECK);
     }
 
     // Dropping App closes the microphone (awaited), removes the tray icon and
@@ -314,6 +324,27 @@ fn handle(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LR
         }
         WM_TIMER if wparam == TIMER_RECONCILE => {
             hotkey::reconcile();
+        }
+        WM_START_FROM_ELEVATED => {
+            // FR-8.8: Start is a lower-integrity window, so Esc reaches it.
+            let closed = injector::tap_key(VK_ESCAPE);
+            unsafe { SetTimer(hwnd, TIMER_START_RECHECK, START_RECHECK_MS, None) };
+            with_app(|app| {
+                app.log.event("start.closed", &[field("ok", closed)]);
+                app.tray.notify(
+                    "Administrator window",
+                    "Windows hides the hotkey from dictate in windows running as administrator.                      Dictate in an ordinary window and paste with Ctrl+V.",
+                );
+            });
+        }
+        WM_TIMER if wparam == TIMER_START_RECHECK => {
+            unsafe { KillTimer(hwnd, TIMER_START_RECHECK) };
+            // An Esc sent mid-animation can be lost. Only retried while Start
+            // is still in front, so it never lands in an application.
+            if start_guard::start_in_front() {
+                let closed = injector::tap_key(VK_ESCAPE);
+                with_app(|app| app.log.event("start.closeRetried", &[field("ok", closed)]));
+            }
         }
         WM_TRAY => {
             let mouse = (lparam as usize & 0xFFFF) as u32;

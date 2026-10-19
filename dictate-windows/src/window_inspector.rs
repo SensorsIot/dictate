@@ -6,8 +6,10 @@ use std::path::Path;
 
 use dictate_core::text_sanitizer;
 use dictate_core::TargetContext;
-use windows_sys::Win32::Foundation::{CloseHandle, HWND};
-use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ACCESS_DENIED, HWND};
+use windows_sys::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetClassNameW, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
 };
@@ -22,7 +24,7 @@ pub fn describe(window: HWND, extra_console_processes: &[String]) -> TargetConte
     }
 
     let title = read_title(window);
-    let process = read_process_name(window);
+    let process = process_name(window);
     let is_console =
         text_sanitizer::looks_like_console(&process, extra_console_processes) || is_console_window_class(window);
 
@@ -39,9 +41,32 @@ fn read_title(window: HWND) -> String {
     }
 }
 
+/// Whether the window belongs to a process above dictate's integrity level —
+/// in practice one running as administrator. Such a process refuses full query
+/// access to an unelevated one; limited access still works, so a refusal of
+/// the full kind is the signal (checked on this machine against an
+/// administrator PowerShell).
+pub fn is_elevated(window: HWND) -> bool {
+    let mut pid = 0u32;
+
+    unsafe {
+        if GetWindowThreadProcessId(window, &mut pid) == 0 || pid == 0 {
+            return false;
+        }
+
+        let process = OpenProcess(PROCESS_QUERY_INFORMATION, 0, pid);
+        if process.is_null() {
+            return GetLastError() == ERROR_ACCESS_DENIED;
+        }
+
+        CloseHandle(process);
+        false
+    }
+}
+
 /// Executable name without extension, e.g. "wezterm-gui".
 /// Limited-information access works on elevated processes too.
-fn read_process_name(window: HWND) -> String {
+pub fn process_name(window: HWND) -> String {
     let mut pid = 0u32;
 
     unsafe {
