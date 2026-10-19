@@ -31,7 +31,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_CONTEXTMENU, WM_DESTROY, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 
-use crate::audio::{Recorder, RecorderEvent};
+use crate::audio::{resolve_input, Recorder, RecorderEvent};
 use crate::overlay::{Overlay, SessionState};
 use crate::tray::{self, MenuChoice, Tray};
 use crate::win::{
@@ -108,6 +108,7 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
     let recorder = Recorder::new(
         config.maximum_recording_seconds,
         config.keep_microphone_open,
+        config.input_device.clone(),
         Arc::new(move |event: RecorderEvent| {
             // Raised on the capture thread. Everything real is posted to the
             // UI thread, where the state machine lives.
@@ -137,6 +138,7 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
     let started_fields = [
         field("hotkey", format!("0x{:02X}", config.hotkey_virtual_key)),
         field("keepMicOpen", config.keep_microphone_open),
+        field("input", resolve_input(config.input_device.as_deref()).1),
         field("ignoreInjected", config.ignore_injected_hotkey),
         field("cleanup", config.cleanup_model.as_str()),
     ];

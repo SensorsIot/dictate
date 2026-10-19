@@ -34,6 +34,9 @@ pub struct DictateConfig {
     /// Peak amplitude (0–32767) below which a recording counts as silence.
     pub silence_threshold: i32,
     pub keep_microphone_open: bool,
+    /// Record from the first input whose name contains this text, e.g.
+    /// "BRIO". None, or no match, means the Windows default input (FR-9.6).
+    pub input_device: Option<String>,
     pub append_space_after_insert: bool,
     pub always_copy_to_clipboard: bool,
     /// Never the dictated text — see `DiagnosticLog`. Off: the user chose zero persistence.
@@ -65,6 +68,7 @@ impl Default for DictateConfig {
             maximum_recording_seconds: 120,
             silence_threshold: 200,
             keep_microphone_open: false,
+            input_device: None,
             append_space_after_insert: true,
             always_copy_to_clipboard: true,
             enable_diagnostic_log: false,

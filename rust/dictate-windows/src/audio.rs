@@ -39,8 +39,8 @@ use std::time::{Duration, Instant};
 use dictate_core::wav;
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::Media::Audio::{
-    waveInAddBuffer, waveInClose, waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset, waveInStart,
-    waveInUnprepareHeader, CALLBACK_EVENT, HWAVEIN, WAVEFORMATEX, WAVEHDR, WAVE_MAPPER, WHDR_DONE,
+    waveInAddBuffer, waveInClose, waveInGetDevCapsW, waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset, waveInStart,
+    waveInUnprepareHeader, CALLBACK_EVENT, HWAVEIN, WAVEFORMATEX, WAVEHDR, WAVEINCAPSW, WAVE_MAPPER, WHDR_DONE,
 };
 use windows_sys::Win32::System::Threading::{CreateEventW, SetEvent, WaitForSingleObject};
 
@@ -48,6 +48,36 @@ use windows_sys::Win32::System::Threading::{CreateEventW, SetEvent, WaitForSingl
 /// half-full buffer, large enough to be cheap.
 const BUFFER_BYTES: usize = 1600;
 const BUFFER_COUNT: usize = 3;
+
+/// The winmm device to record from, and a description for the log: the first
+/// input whose name contains `wanted` (case-insensitive), otherwise the
+/// Windows default. winmm names are cut at 31 characters, which still leaves
+/// "Microphone (Logitech BRIO)" whole.
+pub fn resolve_input(wanted: Option<&str>) -> (u32, String) {
+    let Some(wanted) = wanted.map(str::trim).filter(|w| !w.is_empty()) else {
+        return (WAVE_MAPPER, "default".into());
+    };
+    let needle = wanted.to_lowercase();
+
+    let count = unsafe { waveInGetNumDevs() };
+    for index in 0..count {
+        let mut caps: WAVEINCAPSW = unsafe { std::mem::zeroed() };
+        let found = unsafe { waveInGetDevCapsW(index as _, &mut caps, size_of::<WAVEINCAPSW>() as u32) } == 0;
+        if !found {
+            continue;
+        }
+
+        let name_units = caps.szPname;
+        let length = name_units.iter().position(|&u| u == 0).unwrap_or(name_units.len());
+        let name = String::from_utf16_lossy(&name_units[..length]);
+
+        if name.to_lowercase().contains(&needle) {
+            return (index, name);
+        }
+    }
+
+    (WAVE_MAPPER, format!("default (no input matches '{wanted}')"))
+}
 
 /// How long a device stays open after a session ends (FR-9.5). A press within
 /// this window reuses it and captures at once; without it, a quick second
@@ -95,6 +125,7 @@ struct Inner {
     open_error: Mutex<Option<String>>,
     notify: Notify,
     keep_open: bool,
+    input_device: Option<String>,
     max_bytes: usize,
 }
 
@@ -107,7 +138,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Recorder {
-    pub fn new(maximum_seconds: i32, keep_open: bool, notify: Notify) -> Self {
+    pub fn new(maximum_seconds: i32, keep_open: bool, input_device: Option<String>, notify: Notify) -> Self {
         let bytes_per_second = wav::SAMPLE_RATE as usize * wav::CHANNELS as usize * wav::BITS_PER_SAMPLE as usize / 8;
         Self {
             inner: Arc::new(Inner {
@@ -123,6 +154,7 @@ impl Recorder {
                 open_error: Mutex::new(None),
                 notify,
                 keep_open,
+                input_device,
                 max_bytes: maximum_seconds.max(1) as usize * bytes_per_second,
             }),
         }
@@ -144,7 +176,7 @@ impl Recorder {
         thread::spawn(move || {
             if inner.keep_open {
                 Inner::open_for(&inner, None);
-            } else if let Ok(device) = Device::open(Weak::new(), Arc::clone(&inner.notify)) {
+            } else if let Ok(device) = Device::open(Weak::new(), Arc::clone(&inner.notify), inner.device_id()) {
                 // Pre-warming is an optimisation. If the device refuses now it
                 // reports the real error on the first press, where there is a
                 // user to tell.
@@ -238,12 +270,18 @@ impl Drop for Recorder {
 }
 
 impl Inner {
+    /// Resolved on every open rather than once, so a camera plugged in after
+    /// startup is picked up by the next press.
+    fn device_id(&self) -> u32 {
+        resolve_input(self.input_device.as_deref()).0
+    }
+
     /// Opens a device on the calling (background) thread and keeps it only if
     /// it is still wanted: in keep-open mode always, otherwise only while the
     /// session that asked for it is recording. No lock is held while opening,
     /// so `stop` on the UI thread never waits for it.
     fn open_for(inner: &Arc<Inner>, session: Option<u64>) {
-        match Device::open(Arc::downgrade(inner), Arc::clone(&inner.notify)) {
+        match Device::open(Arc::downgrade(inner), Arc::clone(&inner.notify), inner.device_id()) {
             Ok(device) => {
                 let mut slot = lock(&inner.device);
                 let wanted = slot.is_none()
@@ -332,7 +370,7 @@ struct Device {
 }
 
 impl Device {
-    fn open(sink: Weak<Inner>, notify: Notify) -> Result<Self, String> {
+    fn open(sink: Weak<Inner>, notify: Notify, device_id: u32) -> Result<Self, String> {
         let stop = Arc::new(AtomicBool::new(false));
         let wake = Arc::new(Event::new()?);
         let (ready_tx, ready_rx) = mpsc::channel();
@@ -342,7 +380,7 @@ impl Device {
             let wake = Arc::clone(&wake);
             thread::Builder::new()
                 .name("dictate-capture".into())
-                .spawn(move || capture_thread(sink, notify, stop, wake, ready_tx))
+                .spawn(move || capture_thread(sink, notify, stop, wake, ready_tx, device_id))
                 .map_err(|e| format!("Could not start the capture thread: {e}"))?
         };
 
@@ -379,6 +417,7 @@ fn capture_thread(
     stop: Arc<AtomicBool>,
     wake: Arc<Event>,
     ready: mpsc::Sender<Result<(), String>>,
+    device_id: u32,
 ) {
     let header_size = size_of::<WAVEHDR>() as u32;
     let format = WAVEFORMATEX {
@@ -398,7 +437,7 @@ fn capture_thread(
 
     unsafe {
         let mut device: HWAVEIN = std::mem::zeroed();
-        let opened = waveInOpen(&mut device, WAVE_MAPPER, &format, wake.handle() as usize, 0, CALLBACK_EVENT);
+        let opened = waveInOpen(&mut device, device_id, &format, wake.handle() as usize, 0, CALLBACK_EVENT);
         if opened != 0 {
             let _ = ready.send(Err(format!("Could not open the microphone (MMSYSERR {opened}).")));
             return;

@@ -12,6 +12,7 @@ fn defaults_match_the_configuration_catalogue() {
     assert_eq!(config.maximum_recording_seconds, 120);
     assert_eq!(config.language, LanguageMode::Auto);
     assert!(config.swiss_spelling);
+    assert_eq!(config.input_device, None);
     assert_eq!(config.scribe_model_id, "scribe_v2");
     assert_eq!(config.cleanup_model, "claude-haiku-4-5");
     assert_eq!(config.silence_threshold, 200);
@@ -45,6 +46,7 @@ fn files_written_by_the_csharp_build_read_back_the_same() {
             "hotkeyVirtualKey": 163,
             "LANGUAGE": "german",
             "SwissSpelling": false,
+            "inputdevice": "BRIO",
             "OverlayPosition": "NearCursor",
             "Vocabulary": ["HB9XYZ"],
             "SomethingFromTheFuture": 1,
@@ -55,6 +57,7 @@ fn files_written_by_the_csharp_build_read_back_the_same() {
     assert_eq!(config.hotkey_virtual_key, 163);
     assert_eq!(config.language, LanguageMode::German);
     assert!(!config.swiss_spelling);
+    assert_eq!(config.input_device.as_deref(), Some("BRIO"));
     assert_eq!(config.overlay_position, OverlayPosition::NearCursor);
     assert_eq!(config.vocabulary, ["HB9XYZ"]);
     assert_eq!(config.minimum_hold_ms, 300, "unspecified keys keep their defaults");

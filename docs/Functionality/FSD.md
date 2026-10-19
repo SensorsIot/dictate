@@ -436,6 +436,15 @@ start and the user shall be told.
 **FR-9.4** [Must] `[derived]` If the input device fails mid-utterance, audio
 captured before the failure shall still be processed.
 
+**FR-9.6** [Should] `[user]` When `InputDevice` is set, audio shall be captured
+from the first input whose name contains it, case-insensitively; with no
+match, from the Windows default input. The device in use shall be logged.
+
+> Lets dictation use one microphone (the user's Logitech BRIO) without making
+> it the default for every other application. Resolved on every open, so a
+> device plugged in after startup is used from the next press. Implemented in
+> the Rust build only.
+
 **FR-9.5** [Must] `[user]` When `KeepMicrophoneOpen` is off, the capture device
 shall stay open for 3 s after a session ends and then close, unless a new
 session has started in that time, which reuses it. Delivery of the ended
@@ -787,6 +796,7 @@ sit at the second or third step. Run `/fsd-engineer audit` for the real position
 | `AppendSpaceAfterInsert` | bool | `true` | FR-6.4 |
 | `SilenceThreshold` | int | `200` | FR-9.3 |
 | `KeepMicrophoneOpen` | bool | `false` | FR-9.2 |
+| `InputDevice` | string? | `null` (Windows default) | FR-9.6 |
 | `EnableDiagnosticLog` | bool | `false` | — |
 | `OverlayPosition` | enum | `BottomRight` | FR-14.2 |
 | `InjectionChunkSize` | int | `200` | FR-12.3 |
