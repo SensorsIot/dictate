@@ -1,13 +1,13 @@
 # Harness — how dictate is built and changed
 
 The HOW plane. Nothing here is externally observable; if a statement could be
-checked by a black-box tester, it belongs in the [FSD](../Functionality/FSD.md)
+checked by a black-box tester, it belongs in the [FSD](../Functionality/dictate_FSD.md)
 instead.
 
 ## 0. Why it is built this way
 
 Implementation design and the alternatives it does not use. Product-level
-design — what the system must do — is in the [FSD](../Functionality/FSD.md) §1.4.
+design — what the system must do — is in the [FSD](../Functionality/dictate_FSD.md) §1.4.
 
 | Uses | Not used | Why |
 |---|---|---|

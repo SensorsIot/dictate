@@ -5,7 +5,7 @@ one of them — mixing them is why specifications rot.
 
 | Plane | Question | Where | Read it when |
 |---|---|---|---|
-| **WHAT** | What must be true? | [`Functionality/FSD.md`](Functionality/FSD.md) | You need to know the required behaviour, or whether something is a bug |
+| **WHAT** | What must be true? | [`Functionality/dictate_FSD.md`](Functionality/dictate_FSD.md) | You need to know the required behaviour, or whether something is a bug |
 | **HOW** | How is it built and changed? | [`Harness/00-Overview.md`](Harness/00-Overview.md) | You are about to write code, a test, or a workflow |
 | **OPERATE** | How do I run it? | [`UserDocumentation/Manual.md`](UserDocumentation/Manual.md) | You want to install it, use it, or recover from something |
 

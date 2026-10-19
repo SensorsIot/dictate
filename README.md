@@ -96,7 +96,7 @@ a ready `dictate.exe` to the run (*Actions → the run → Artifacts →
 dictate-exe*). Download it, quit the running dictate from its tray menu, and
 start the new one. Settings and stored keys stay where they are.
 
-Before changing behaviour, read the [functional specification](docs/Functionality/FSD.md):
+Before changing behaviour, read the [functional specification](docs/Functionality/dictate_FSD.md):
 the rules that matter most (no newline into a terminal, text only into the
 window you started in, raw transcript when cleanup fails) are specified there
 and pinned by tests. [How it is built](docs/Harness/00-Overview.md) covers the
@@ -106,7 +106,7 @@ rest.
 
 | | |
 |---|---|
-| [What it must do](docs/Functionality/FSD.md) | Functional specification, state model, verification contracts, and the reasons behind the design |
+| [What it must do](docs/Functionality/dictate_FSD.md) | Functional specification, state model, verification contracts, and the reasons behind the design |
 | [How it is built](docs/Harness/00-Overview.md) | Build rules, seams, testing standard |
 | [How to run it](docs/UserDocumentation/Manual.md) | Install, use, configure, recover |
 | [What is verified](testing/test-plan.yaml) | Every test, its tier, and what it last produced |
