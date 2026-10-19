@@ -49,6 +49,14 @@ use windows_sys::Win32::System::Threading::{CreateEventW, SetEvent, WaitForSingl
 const BUFFER_BYTES: usize = 1600;
 const BUFFER_COUNT: usize = 3;
 
+/// How long a device stays open after a session ends (FR-9.5). A press within
+/// this window reuses it and captures at once; without it, a quick second
+/// press waited for the previous device to finish closing — about three
+/// seconds on a USB interface closed mid-startup — and lost its first second
+/// of speech. Delivery never waits for this: the audio is handed over on
+/// release, and the device closes in the background.
+const LINGER: Duration = Duration::from_secs(3);
+
 /// How long a press waits for the device to open before reporting failure.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -177,21 +185,36 @@ impl Recorder {
 
     /// Stops recording and returns the captured PCM.
     pub fn stop(&self) -> Vec<u8> {
-        let pcm = {
+        let (pcm, session) = {
             let mut capture = lock(&self.inner.capture);
             if !capture.recording {
                 return Vec::new();
             }
             capture.recording = false;
-            std::mem::take(&mut capture.buffer)
+            (std::mem::take(&mut capture.buffer), capture.session)
         };
 
         if !self.inner.keep_open {
-            // Detached, not awaited: the capture thread closes the device and
-            // reports DeviceClosed. A new press opens a fresh one meanwhile.
-            if let Some(device) = lock(&self.inner.device).take() {
-                device.close(false);
-            }
+            // Closed after LINGER unless another session has started by then.
+            // Detached, never awaited: the capture thread closes the device
+            // and reports DeviceClosed.
+            let inner = Arc::clone(&self.inner);
+            thread::spawn(move || {
+                thread::sleep(LINGER);
+
+                let mut slot = lock(&inner.device);
+                let idle = {
+                    let capture = lock(&inner.capture);
+                    !capture.recording && capture.session == session
+                };
+
+                if idle {
+                    if let Some(device) = slot.take() {
+                        drop(slot);
+                        device.close(false);
+                    }
+                }
+            });
         }
 
         pcm

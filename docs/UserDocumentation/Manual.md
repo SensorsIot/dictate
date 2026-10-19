@@ -84,7 +84,7 @@ The settings you are most likely to want:
 | `ShowOverlay` | `true` | The recording indicator. dictate makes no sound, so this is the only cue — turning it off leaves nothing to tell you a session is running |
 | `OverlayPosition` | `BottomRight` | Where the recording indicator sits: `BottomRight`, `BottomLeft`, `TopRight`, `TopLeft`, or `NearCursor` to have it follow the mouse |
 | `EnableDiagnosticLog` | `false` | Write `%LOCALAPPDATA%\dictate\dictate.log` — timings and outcomes, never your text |
-| `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently |
+| `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently. When off, the microphone still stays open for 3 s after each dictation (Rust build), so a quick follow-up press captures at once; your text is not delayed by this |
 | `ExtraConsoleProcesses` | `[]` | Extra terminal executables that must never receive newlines |
 
 A malformed `config.json` stops dictate at startup with an error rather than

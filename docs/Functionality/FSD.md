@@ -436,6 +436,20 @@ start and the user shall be told.
 **FR-9.4** [Must] `[derived]` If the input device fails mid-utterance, audio
 captured before the failure shall still be processed.
 
+**FR-9.5** [Must] `[user]` When `KeepMicrophoneOpen` is off, the capture device
+shall stay open for 3 s after a session ends and then close, unless a new
+session has started in that time, which reuses it. Delivery of the ended
+session's text shall not wait for the close.
+
+> Chosen 2026-10-19 after the Rust build's desktop run: a press shortly after
+> a tap waited for the previous device to finish closing (about 3 s for a USB
+> interface closed mid-startup) and lost its first second of speech
+> (`mic.firstBuffer after=1070ms`). The cost is the Windows microphone
+> indicator staying lit 3 s longer after each dictation. *Must not:* text
+> delivered later than without the linger; the device still open 5 s after the
+> last session. *Tier:* desktop. Implemented in the Rust build; the C# build
+> closes on release.
+
 ## 10. Transcription
 
 **FR-10.1** [Must] `[user]` Audio shall be transcribed by ElevenLabs Scribe via
