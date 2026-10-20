@@ -229,7 +229,7 @@ tests:
     verifies: [FR-5.2, FR-6.1, FR-6.2, FR-7.1, FR-17.2]
     must_not: text typed into a window that did not have focus at key-press
     status: implemented
-    last_result: pass        # run 39259367720, 2026-10-19
+    last_result: pass        # run 39489817776, 2026-10-20
     gap: >
       Runs against a fake platform. Whether each head reports focus, typing
       and capture truthfully is desktop-tier.
@@ -333,8 +333,8 @@ tests:
     file: dictate-core/tests/session.rs
     verifies: [FR-5.1]
     must_not: a press ignored while processing; a later utterance typed before an earlier one; one utterance's text in another's target; a keystroke while the hotkey is held
-    status: designed
-    last_result: never_run
+    status: implemented
+    last_result: pass        # run 39489817776, 2026-10-20
 
   # ---- ci tier ---------------------------------------------------------------
 
@@ -446,8 +446,8 @@ tests:
       Both sentences typed, the long one first; the log shows the second
       recording.start before the first utterance line.
     must_not: the second press ignored; the sentences swapped; a character typed while the hotkey is held
-    status: designed
-    last_result: never_run
+    status: implemented
+    last_result: pass        # build c01c0b8, 2026-10-20, in Terminal: second press 1.2 s after the first release, first sentence held back and typed 3 ms after the second release, order kept
 
   # ---- desktop tier ----------------------------------------------------------
 
