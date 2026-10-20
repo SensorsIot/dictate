@@ -8,6 +8,7 @@ use crate::cleaner::{Cleaner, HaikuCleaner, PassthroughCleaner};
 use crate::config::DictateConfig;
 use crate::error::Error;
 use crate::infomaniak::{InfomaniakAccount, InfomaniakCleaner, InfomaniakTranscriber};
+use crate::language_guard::GermanOrEnglish;
 use crate::model::{CleanupProvider, Credential, TranscriptionProvider};
 use crate::scribe::{ScribeTranscriber, Transcriber};
 
@@ -39,6 +40,8 @@ pub fn build(
         }
         TranscriptionProvider::Infomaniak => Box::new(InfomaniakTranscriber::new(account(token)?, config)),
     };
+    // FR-10.8: whichever provider, Auto means German or English.
+    let transcriber: Box<dyn Transcriber> = Box::new(GermanOrEnglish::new(transcriber));
 
     let cleaner: Box<dyn Cleaner> = match key(config.cleanup_provider.credential()) {
         None => Box::new(PassthroughCleaner),

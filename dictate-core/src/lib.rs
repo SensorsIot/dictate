@@ -12,6 +12,7 @@ pub mod config;
 pub mod diagnostic_log;
 mod error;
 pub mod infomaniak;
+pub mod language_guard;
 pub mod model;
 pub mod pipeline;
 pub mod providers;
@@ -27,6 +28,7 @@ pub use config::DictateConfig;
 pub use diagnostic_log::{field, DiagnosticLog, Field, LogValue};
 pub use error::Error;
 pub use infomaniak::{InfomaniakAccount, InfomaniakCleaner, InfomaniakTranscriber};
+pub use language_guard::GermanOrEnglish;
 pub use model::{
     CleanupProvider, Credential, LanguageMode, OverlayPosition, TargetContext, Transcript, TranscriptionProvider, Utterance,
     UtteranceStatus,

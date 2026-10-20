@@ -496,7 +496,8 @@ ElevenLabs and `whisper` for Infomaniak.
 > not a rebuild.
 
 **FR-10.3** [Must] `[user]` When `Language` is `Auto` no `language_code` shall be
-sent; when it is `German` or `English`, `de` or `en` shall be sent respectively.
+sent on the first pass (FR-10.8); when it is `German` or `English`, `de` or `en`
+shall be sent respectively.
 
 > There is deliberately no second hotkey to pin the language for a single
 > utterance: the config setting is enough. Note that a language misdetection is
@@ -522,7 +523,9 @@ with a Bearer token, and `GET /1/ai/{product}/results/{batch}` polled until the
 batch succeeds or fails; a failed batch is an error, never an empty transcript.
 `{product}` is `InfomaniakProductId`, or the token's first AI Services product,
 looked up on first use. A pinned `Language` is sent as `language`, and
-`Vocabulary` as Whisper's `prompt`.
+`Vocabulary` as Whisper's `prompt`. The response format is `verbose_json`,
+the only one that reports the detected language and segment log-probabilities
+(FR-10.8).
 
 > The API is asynchronous and each poll takes about a second on Infomaniak's
 > side, so an utterance typically takes 3–4 s to transcribe (measured
@@ -530,6 +533,20 @@ looked up on first use. A pinned `Language` is sent as `language`, and
 > a supplied language "will translate the output"; measured, German audio sent
 > with `en` came back in German, so pinning is safe under FR-11.4. *Tier:* host
 > (H-21) for the requests and parsing; desktop for latency.
+
+**FR-10.8** [Must] `[user]` dictate shall deliver German or English only. With
+`Language` `Auto`, a transcript the provider reports in any other language
+(Swiss German included) shall be redone as German and as English in parallel,
+and the one with the higher mean log-probability delivered; without scores,
+German. With `German` or `English` pinned, that language is sent as before.
+
+> Neither Scribe nor Whisper accepts a set of allowed languages, so the
+> restriction is enforced after detection. Measured on 2026-10-20: forcing the
+> wrong one of the two does not translate on either provider; the words come
+> back as spoken, with a lower log-probability (Whisper −0.006 for German audio
+> as German, −0.045 forced to English; Scribe likewise). A detection outside the
+> two costs one extra transcription round. *Must not:* text in a third language
+> delivered. *Tier:* host (H-24).
 
 > **VC** for FR-10.1/10.3/10.5 — *Pre:* a recorded Scribe response fixture.
 > *Stimulus:* parse it. *Expect:* `text` and `language_code` extracted, whitespace
@@ -964,7 +981,7 @@ macOS; **System Settings → General → Login Items** starts it at login.
 | `IgnoreInjectedHotkey` | bool | `false` | FR-8.6 |
 | `MinimumHoldMs` | int | `300` | FR-5.2 |
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
-| `Language` | enum | `Auto` | FR-10.3 |
+| `Language` | enum | `Auto` (German or English); `German`; `English` | FR-10.3, FR-10.8 |
 | `SwissSpelling` | bool | `true` | FR-11.11 |
 | `TranscriptionProvider` | enum | `ElevenLabs` (or `Infomaniak`) | FR-10.1 |
 | `TranscriptionModel` | string? | `null`: `ScribeModelId` / `whisper` | FR-10.2 |

@@ -12,7 +12,7 @@ fn the_transcription_request_carries_model_language_and_vocabulary() {
 
     let pinned = InfomaniakTranscriber::form_fields("whisper", LanguageMode::German, &vocabulary);
     assert!(pinned.contains(&("model", "whisper".to_owned())));
-    assert!(pinned.contains(&("response_format", "text".to_owned())));
+    assert!(pinned.contains(&("response_format", "verbose_json".to_owned())));
     assert!(pinned.contains(&("language", "de".to_owned())));
     assert!(pinned.contains(&("prompt", "AREDN, ESP32".to_owned())));
 
@@ -36,8 +36,17 @@ fn a_result_poll_distinguishes_running_done_and_failed() {
     let running = r#"{"result":"success","data":{"status":"processing","data":null}}"#;
     assert_eq!(InfomaniakTranscriber::parse_result(running).unwrap(), BatchState::Running);
 
-    let done = r#"{"result":"success","data":{"status":"success","data":"Das ist ein kurzer Test.\n"}}"#;
-    assert_eq!(InfomaniakTranscriber::parse_result(done).unwrap(), BatchState::Done("Das ist ein kurzer Test.".into()));
+    let pending = r#"{"status":"pending","url":null,"data":null}"#;
+    assert_eq!(InfomaniakTranscriber::parse_result(pending).unwrap(), BatchState::Running);
+
+    // As measured: no envelope, and `data` is the verbose_json document as a string.
+    let done = r#"{"status":"success","url":"x","data":"{\"language\": \"german\", \"text\": \" Das ist ein kurzer Test.\", \"segments\": [{\"avg_logprob\": -0.2}, {\"avg_logprob\": -0.4}]}"}"#;
+    let BatchState::Done(transcript) = InfomaniakTranscriber::parse_result(done).unwrap() else {
+        panic!("expected a finished batch");
+    };
+    assert_eq!(transcript.text, "Das ist ein kurzer Test.");
+    assert_eq!(transcript.language_code.as_deref(), Some("german"));
+    assert!((transcript.confidence.unwrap() + 0.3).abs() < 1e-9, "mean of the segment log-probabilities");
 
     // A failed batch must surface as an error, never as an empty transcript.
     let failed = r#"{"result":"success","data":{"status":"failed","data":null}}"#;

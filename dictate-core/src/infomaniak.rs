@@ -77,10 +77,10 @@ impl InfomaniakAccount {
 // ---- Transcription ----------------------------------------------------------
 
 /// What a result poll found.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum BatchState {
     Running,
-    Done(String),
+    Done(Transcript),
 }
 
 pub struct InfomaniakTranscriber {
@@ -106,8 +106,10 @@ impl InfomaniakTranscriber {
     /// A pinned language is sent: despite the API reference saying a language
     /// "will translate the output", German audio sent with `en` came back in
     /// German. The vocabulary rides as Whisper's prompt, which biases spelling.
+    /// `verbose_json` because only it reports the detected language and the
+    /// segment log-probabilities FR-10.8 needs.
     pub fn form_fields(model: &str, language: LanguageMode, vocabulary: &[String]) -> Vec<(&'static str, String)> {
-        let mut fields = vec![("model", model.to_owned()), ("response_format", "text".to_owned())];
+        let mut fields = vec![("model", model.to_owned()), ("response_format", "verbose_json".to_owned())];
         if let Some(code) = language.to_language_code() {
             fields.push(("language", code.to_owned()));
         }
@@ -127,15 +129,30 @@ impl InfomaniakTranscriber {
             .ok_or_else(|| Error::new(format!("Infomaniak returned no batch id: {}", truncate(json, 300))))
     }
 
-    /// A `GET /1/ai/{product}/results/{batch}` response.
+    /// A `GET /1/ai/{product}/results/{batch}` response. Its `data` is the
+    /// Whisper `verbose_json` document, delivered as a JSON string.
     pub fn parse_result(json: &str) -> Result<BatchState, Error> {
         let root = parse_json(json, "Infomaniak result")?;
         let result = unwrap_envelope(&root);
         match result.get("status").and_then(Value::as_str) {
             Some("pending" | "processing") => Ok(BatchState::Running),
             Some("success") => {
-                let text = result.get("data").and_then(Value::as_str).unwrap_or_default();
-                Ok(BatchState::Done(text.trim().to_owned()))
+                let document = match result.get("data") {
+                    Some(Value::String(inner)) => parse_json(inner, "Infomaniak transcript")?,
+                    Some(inner) => inner.clone(),
+                    None => Value::Null,
+                };
+                let text = document.get("text").and_then(Value::as_str).unwrap_or_default().trim();
+                let language = document.get("language").and_then(Value::as_str);
+                let logprobs: Vec<f64> = document
+                    .get("segments")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|segment| segment.get("avg_logprob").and_then(Value::as_f64))
+                    .collect();
+                let confidence = (!logprobs.is_empty()).then(|| logprobs.iter().sum::<f64>() / logprobs.len() as f64);
+                Ok(BatchState::Done(Transcript::new(text, language).with_confidence(confidence)))
             }
             _ => Err(Error::new(format!("Infomaniak transcription failed: {}", truncate(json, 500)))),
         }
@@ -181,10 +198,7 @@ impl Transcriber for InfomaniakTranscriber {
                 .timeout(remaining())
                 .send()?;
             match Self::parse_result(&checked(response, "Infomaniak")?)? {
-                BatchState::Done(text) => {
-                    let pinned = language.to_language_code();
-                    return Ok(Transcript::new(text, pinned));
-                }
+                BatchState::Done(transcript) => return Ok(transcript),
                 BatchState::Running => thread::sleep(Duration::from_millis(100).min(remaining())),
             }
         }

@@ -154,7 +154,8 @@ impl CleanupProvider {
 /// Which language Scribe should assume for an utterance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LanguageMode {
-    /// Let Scribe decide. Wrong on short utterances often enough to want the override.
+    /// German or English, whichever was spoken — never another language
+    /// (FR-10.8). Wrong on short utterances often enough to want the override.
     #[default]
     Auto,
     German,
@@ -172,20 +173,40 @@ impl LanguageMode {
             LanguageMode::Auto => None,
         }
     }
+
+    /// German or English from a language a provider reports, in whatever form
+    /// it uses: ISO 639-1 (`de`), ISO 639-3 (`deu`, Scribe) or a name
+    /// (`german`, Whisper). Anything else, Swiss German (`gsw`) included, is
+    /// None: dictate writes Standard German.
+    pub fn from_reported(code: &str) -> Option<LanguageMode> {
+        match code.trim().to_ascii_lowercase().as_str() {
+            "de" | "deu" | "ger" | "german" => Some(LanguageMode::German),
+            "en" | "eng" | "english" => Some(LanguageMode::English),
+            _ => None,
+        }
+    }
 }
 
 /// The raw result of transcription, before cleanup.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transcript {
     /// Verbatim transcript, fillers and all.
     pub text: String,
-    /// What Scribe detected, or the code we pinned.
+    /// What the provider detected, as it reports it, or the code we pinned.
     pub language_code: Option<String>,
+    /// Mean log-probability of the recognised text; closer to 0 is surer.
+    /// Comparable only between two runs of the same provider on the same audio.
+    pub confidence: Option<f64>,
 }
 
 impl Transcript {
     pub fn new(text: impl Into<String>, language_code: Option<&str>) -> Self {
-        Self { text: text.into(), language_code: language_code.map(str::to_owned) }
+        Self { text: text.into(), language_code: language_code.map(str::to_owned), confidence: None }
+    }
+
+    pub fn with_confidence(mut self, confidence: Option<f64>) -> Self {
+        self.confidence = confidence;
+        self
     }
 }
 

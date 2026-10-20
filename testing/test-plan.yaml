@@ -314,6 +314,17 @@ tests:
     status: implemented
     last_result: never_run
 
+  - id: H-24
+    name: Auto keeps German or English; a third language is redone as both and the surer wins
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: dictate-core/tests/language_guard.rs
+    verifies: [FR-10.8]
+    must_not: text in a third language delivered, or a second request when German or English was detected
+    status: implemented
+    last_result: never_run
+
   # ---- ci tier ---------------------------------------------------------------
 
   - id: C-01
