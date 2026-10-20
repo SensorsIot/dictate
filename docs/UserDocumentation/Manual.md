@@ -28,8 +28,9 @@ Nothing is saved. No audio file, no transcript, no history on disk.
    dictate.exe --auth
    ```
 
-   You will be asked for an **ElevenLabs** key (speech-to-text) and an
-   **Anthropic** key (cleanup). They are written to Windows Credential Manager,
+   You will be asked for an **ElevenLabs** key (speech-to-text) and a key for
+   the cleanup provider — **Anthropic** by default, **Pizora** if you chose it
+   (see `CleanupProvider` below). They are written to Windows Credential Manager,
    encrypted under your Windows account. They are never written to a file.
 
 4. To start dictate at login, right-click its tray icon and tick **Start with
@@ -43,7 +44,7 @@ elevated process send keystrokes to unelevated windows.
 
 1. Download `dictate-macos.zip` from the same release, unzip it, and move
    `dictate.app` to **Applications**. It runs on Apple Silicon and Intel.
-2. Open it. It asks for the **ElevenLabs** and **Anthropic** keys and stores
+2. Open it. It asks for the **ElevenLabs** key and the cleanup provider's key, and stores
    them in your login Keychain, never in a file. **Re-enter API keys…** in its
    menu, or `dictate.app/Contents/MacOS/dictate --auth`, asks again.
 3. Allow what macOS asks for, in **System Settings → Privacy & Security**:
@@ -99,6 +100,8 @@ The settings you are most likely to want:
 |---|---|---|
 | `Language` | `Auto` | `German` or `English` pins the language when auto-detection keeps guessing wrong on short phrases |
 | `SwissSpelling` | `true` | Swiss Standard German spelling: `ss`, never `ß`. Applies even when cleanup fails |
+| `CleanupProvider` | `Anthropic` | Who cleans up the transcript: `Anthropic` (Claude Haiku) or `Pizora` (AlpineAI, processed in Switzerland). Each keeps its own key; after switching, restart dictate and use **Re-enter API keys…** once to enter the new provider's key |
+| `CleanupModel` | provider's default | Model for cleanup. Unset: `claude-haiku-4-5` for Anthropic, `pizora/bernina-1` for Pizora. `pizora/dom-1` is Pizora's larger, slower, dearer model |
 | `Vocabulary` | project terms | Words to spell exactly this way — project names, call signs, jargon |
 | `HotkeyVirtualKey` | `92` (Right Windows) | Virtual-key code to hold — see the table below for the ones worth using |
 | `SuppressHotkey` | `true` | Swallow the hotkey instead of passing it to the focused window. Required for the Windows key, which otherwise opens the Start menu on every dictation. Turn it off if you move the hotkey to an already-inert key |
@@ -206,7 +209,7 @@ Turn the diagnostic log on first — it answers most of these directly.
 | The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` — it says how long the microphone took to deliver anything. A large value means the interface was slow to spin its capture stream up; set `"KeepMicrophoneOpen": true`, at the cost of the microphone indicator staying lit. |
 | A held key produces several short utterances instead of one | Every `recording.stop` will read `reason=Reconciled`. dictate is deciding the key was released while you are still holding it — check that `SuppressHotkey` matches your hotkey, and report it with the log. |
 | The keyboard stops responding, or every key acts as a shortcut | A modifier is stuck down at the system level. Tap the hotkey once to clear it. |
-| Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired Anthropic key. |
+| Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired cleanup key. With Pizora, `insufficient_quota` in the notification means the credit is used up. |
 | A German sentence comes back in English | A bug, not a setting. Cleanup is explicitly instructed never to translate. Please report it. |
 | A term is consistently mis-spelled | Add it to `Vocabulary` in the config. |
 | The hotkey does nothing | Check the tray icon is there. If it is, restart dictate — another application may have taken the low-level hook. |

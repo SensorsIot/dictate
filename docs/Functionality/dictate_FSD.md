@@ -60,7 +60,7 @@ language, project split, build strategy, audio stack — is in
 |---|---|---|
 | Windows 11 and macOS clients, one shared core | A Linux desktop · a service on the dev VM | The hotkey, the microphone and the target window all live on the desktop the user types at. A container on a headless VM has none of the three. Everything above the operating system is shared (§2.3), so both clients behave the same; Part F lists where macOS differs. |
 | ElevenLabs Scribe | Local faster-whisper · Groq · Deepgram | A stated requirement (FR-10.1). The dev VM has 4 vCPUs and no GPU, so a local model there is not viable. |
-| Claude Haiku 4.5 for cleanup | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. |
+| Claude Haiku 4.5 for cleanup, Pizora as the alternative | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. Pizora (AlpineAI) processes the text in Switzerland, for dictation that should not leave it (FR-11.13). |
 | Push-to-talk, hold | Toggle · toggle with silence auto-stop | Key release is an unambiguous end-of-utterance signal. No VAD, and no way to leave the microphone hot by accident. |
 | Synthetic typing (`SendInput`) | Clipboard paste with restore · clipboard only | Works in terminals and over RDP without a per-application paste chord, and does not clobber the clipboard as a side effect of delivery. |
 | German + English, auto with a pin | English only · full auto with no override | The user's work mixes both in one sentence, and auto-detection misfires on short utterances. |
@@ -519,11 +519,28 @@ the response body.
 
 ## 11. Cleanup
 
-**FR-11.1** [Must] `[user]` The raw transcript shall be cleaned by Claude Haiku
-4.5 through the Anthropic Messages API before delivery.
+**FR-11.1** [Must] `[user]` The raw transcript shall be cleaned before delivery
+by the provider `CleanupProvider` selects: `Anthropic` (default), Claude through
+the Anthropic Messages API, or `Pizora`, Pizora by AlpineAI through its
+OpenAI-compatible chat-completions API at `https://api.prod.alpineai.ch/v1`.
 
-**FR-11.2** [Must] `[derived]` The cleanup model identifier shall be configurable,
-default `claude-haiku-4-5`.
+**FR-11.2** [Must] `[derived]` The cleanup model identifier shall be configurable
+as `CleanupModel`. Unset, it is the provider's default: `claude-haiku-4-5` for
+Anthropic, `pizora/bernina-1` for Pizora.
+
+> Unset rather than a fixed default, so switching provider does not send a
+> Claude model name to Pizora. `pizora/bernina-1` is Pizora's fast, economical
+> tier, the one comparable to Haiku.
+
+**FR-11.13** [Must] `[user]` Each provider's key shall be stored separately.
+Switching `CleanupProvider` shall neither need nor delete the other provider's
+key, and the key prompt (FR-15.2) shall ask for the selected provider's key.
+
+> **VC** for FR-11.1/11.2/11.8 with Pizora — *Pre:* none. *Stimulus:* build the
+> request body; parse a recorded chat-completions response. *Expect:* `model`
+> carried, `temperature` 0, the system prompt as the first message; only
+> `choices[0].message.content` returned, never `reasoning`; a response
+> without it is an error. *Tier:* host.
 
 **FR-11.3** [Must] `[user]` Cleanup shall remove fillers and false starts, and add
 sentence punctuation and capitalisation.
@@ -564,8 +581,8 @@ target shall be supplied to cleanup so it can adapt formatting.
 **FR-11.9** [Must] `[derived]` The request shall be abandoned after
 `CleanupTimeoutSeconds` (default 10 s), degrading per FR-7.1.
 
-**FR-11.10** [Should] `[derived]` If no Anthropic key is configured, dictation
-shall still work, delivering the verbatim transcript.
+**FR-11.10** [Should] `[derived]` If the selected provider has no key
+configured, dictation shall still work, delivering the verbatim transcript.
 
 **FR-11.11** [Must] `[user]` When `SwissSpelling` is on (default), the delivered
 text shall contain no `ß` or `ẞ`; each shall be written `ss` / `SS`. This applies
@@ -649,7 +666,7 @@ needs to act or something went wrong.
 Manager as generic credentials, and shall not be written to any file.
 
 **FR-15.2** [Must] `[derived]` `dictate --auth` shall prompt for and store both
-keys.
+keys: ElevenLabs, and the selected cleanup provider's (FR-11.13).
 
 **FR-15.3** [Must] `[derived]` Keys shall not appear in logs, notifications, the
 tray UI, or error messages.
@@ -716,7 +733,8 @@ rest) between them mean a stolen profile yields neither the keys nor the history
 
 **Accepted, not mitigated.** Utterance audio and text traverse two third-party
 services in cleartext-to-them form. That is inherent to using Scribe and
-Haiku (§1.4). Anyone for
+the cleanup provider (§1.4); with `Pizora` the cleanup half stays in
+Switzerland, the transcription half does not. Anyone for
 whom that is unacceptable needs a local model, which is a different product.
 
 ## 19. Performance
@@ -881,7 +899,7 @@ folder**, **Re-enter API keys…** and **Quit dictate**. Notifications appear in
 Notification Center. dictate has no Dock icon and no overlay on macOS.
 
 **FR-22.9** [Must] `[user]` API keys shall be stored in the login Keychain as
-generic passwords, service `dictate`, accounts `elevenlabs` and `anthropic`,
+generic passwords, service `dictate`, accounts `elevenlabs`, `anthropic` and `pizora`,
 and shall not be written to any file. They are entered in system dialogs with
 hidden input: at first start, through **Re-enter API keys…**, or with
 `dictate --auth`. FR-15.3 applies unchanged.
@@ -929,7 +947,8 @@ macOS; **System Settings → General → Login Items** starts it at login.
 | `Language` | enum | `Auto` | FR-10.3 |
 | `SwissSpelling` | bool | `true` | FR-11.11 |
 | `ScribeModelId` | string | `scribe_v2` | FR-10.2 |
-| `CleanupModel` | string | `claude-haiku-4-5` | FR-11.2 |
+| `CleanupProvider` | enum | `Anthropic` (or `Pizora`) | FR-11.1 |
+| `CleanupModel` | string? | `null`: `claude-haiku-4-5` / `pizora/bernina-1` | FR-11.2 |
 | `ScribeTimeoutSeconds` | int | `15` | FR-10.6 |
 | `CleanupTimeoutSeconds` | int | `10` | FR-11.9 |
 | `Vocabulary` | string[] | project terms | FR-11.6 |

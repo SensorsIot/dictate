@@ -3,11 +3,22 @@
 //! account names are part of the stored data: changing them orphans every key
 //! a user has already saved.
 
+use dictate_core::CleanupProvider;
 use security_framework::passwords::{delete_generic_password, get_generic_password, set_generic_password};
 
 const SERVICE: &str = "dictate";
 pub const ELEVENLABS: &str = "elevenlabs";
 pub const ANTHROPIC: &str = "anthropic";
+pub const PIZORA: &str = "pizora";
+
+/// Each cleanup provider keeps its own key, so switching back and forth in
+/// config.json does not mean re-entering one.
+pub fn cleanup_account(provider: CleanupProvider) -> &'static str {
+    match provider {
+        CleanupProvider::Anthropic => ANTHROPIC,
+        CleanupProvider::Pizora => PIZORA,
+    }
+}
 
 pub fn read(account: &str) -> Option<String> {
     let bytes = get_generic_password(SERVICE, account).ok()?;

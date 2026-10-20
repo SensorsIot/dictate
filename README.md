@@ -23,7 +23,8 @@ Three stages, and dictate is mostly the glue between them.
    Scribe](https://elevenlabs.io/speech-to-text), which returns it verbatim:
    fillers, false starts, no punctuation.
 3. **Clean up.** That transcript goes to [Claude Haiku
-   4.5](https://www.anthropic.com/claude) with your personal vocabulary and the
+   4.5](https://www.anthropic.com/claude) — or, if you prefer it processed in
+   Switzerland, to [Pizora](https://alpineai.ch) — with your personal vocabulary and the
    name of the app you're typing into. It fixes the transcript. It is explicitly
    forbidden to translate it, answer it, or improve on what you meant.
 
@@ -65,7 +66,7 @@ and the hotkey is Right Command. The rest of this section is Windows.
    dictate.exe --auth
    ```
 
-   You need an **ElevenLabs** key. An **Anthropic** key is optional — without it
+   You need an **ElevenLabs** key. An **Anthropic** (or **Pizora**) key is optional — without it
    you get dictation without cleanup.
 3. Run it. It lives in the tray. To start it at login, right-click the tray
    icon and tick **Start with Windows**.
@@ -86,7 +87,7 @@ Rust, shipped as one ~4 MB `win-x64` executable with nothing to install. About
 |---|---|
 | `dictate-core` | Platform-free: the pipeline, prompt, sanitisation, degradation rules, config. Unit-tested on Linux in CI. |
 | `dictate-windows` | Every Win32 call, through [`windows-sys`](https://crates.io/crates/windows-sys): `WH_KEYBOARD_LL` hook, winmm capture, `SendInput`, Credential Manager, tray and overlay. |
-| [`reqwest`](https://crates.io/crates/reqwest) | The two HTTPS calls, to ElevenLabs and to the Anthropic Messages API |
+| [`reqwest`](https://crates.io/crates/reqwest) | The two HTTPS calls, to ElevenLabs and to the cleanup provider (Anthropic Messages API or Pizora chat completions) |
 
 The split is deliberate: it keeps the whole testable half runnable on a Linux CI
 runner, and CI compiling `dictate-core` on ubuntu is what enforces it staying

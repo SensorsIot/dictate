@@ -10,10 +10,22 @@ use windows_sys::Win32::Security::Credentials::{
     CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC,
 };
 
+use dictate_core::CleanupProvider;
+
 use crate::win::wide;
 
 pub const ELEVENLABS: &str = "dictate:elevenlabs";
 pub const ANTHROPIC: &str = "dictate:anthropic";
+pub const PIZORA: &str = "dictate:pizora";
+
+/// Each cleanup provider keeps its own key, so switching back and forth in
+/// config.json does not mean re-entering one.
+pub fn cleanup_target(provider: CleanupProvider) -> &'static str {
+    match provider {
+        CleanupProvider::Anthropic => ANTHROPIC,
+        CleanupProvider::Pizora => PIZORA,
+    }
+}
 
 pub fn read(target: &str) -> Option<String> {
     let target = wide(target);

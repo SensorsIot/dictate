@@ -281,6 +281,28 @@ tests:
     status: implemented
     last_result: pass        # run 39219226587, 2026-10-19
 
+  - id: H-21
+    name: Pizora request is deterministic and only message content is taken from the response
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: dictate-core/tests/wav_scribe_prompt.rs
+    verifies: [FR-11.1, FR-11.8]
+    must_not: the reasoning field returned as text to type
+    status: implemented
+    last_result: never_run
+
+  - id: H-22
+    name: CleanupProvider parses, and an unset CleanupModel follows the provider
+    kind: atomic
+    scenario: standard
+    tier: host
+    file: dictate-core/tests/config.rs
+    verifies: [FR-11.1, FR-11.2]
+    must_not: a Claude model name sent to Pizora after switching provider
+    status: implemented
+    last_result: never_run
+
   # ---- ci tier ---------------------------------------------------------------
 
   - id: C-01

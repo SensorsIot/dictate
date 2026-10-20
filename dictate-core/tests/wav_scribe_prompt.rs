@@ -1,5 +1,5 @@
 use dictate_core::cleanup_prompt::{build_system, build_user};
-use dictate_core::{wav, DictateConfig, HaikuCleaner, LanguageMode, ScribeTranscriber, TargetContext};
+use dictate_core::{wav, DictateConfig, HaikuCleaner, LanguageMode, PizoraCleaner, ScribeTranscriber, TargetContext};
 
 fn u16_at(bytes: &[u8], at: usize) -> u16 {
     u16::from_le_bytes([bytes[at], bytes[at + 1]])
@@ -177,4 +177,36 @@ fn only_text_blocks_are_taken_from_the_response() {
 #[test]
 fn a_response_without_content_is_an_error() {
     assert!(HaikuCleaner::extract_text(r#"{"type":"error"}"#).is_err());
+}
+
+// ---- Pizora chat completions (H-21) -----------------------------------------
+
+#[test]
+fn the_pizora_request_is_deterministic_and_carries_the_system_prompt_first() {
+    // FR-11.8, FR-11.2.
+    let body = PizoraCleaner::request_body("pizora/bernina-1", "system", "hello", &TargetContext::unknown());
+
+    assert_eq!(body["temperature"], 0);
+    assert_eq!(body["model"], "pizora/bernina-1");
+    assert_eq!(body["messages"][0]["role"], "system");
+    assert_eq!(body["messages"][0]["content"], "system");
+    assert_eq!(body["messages"][1]["role"], "user");
+    assert!(body["messages"][1]["content"].as_str().unwrap().contains("hello"));
+    assert!(body.get("system").is_none(), "no Anthropic-style top-level system field");
+}
+
+#[test]
+fn only_the_message_content_is_taken_from_a_pizora_response() {
+    let text = PizoraCleaner::extract_text(
+        r#"{"choices":[{"index":0,"message":{"role":"assistant","content":" Hallo Welt. ","reasoning":"The user wants"}}]}"#,
+    )
+    .unwrap();
+
+    assert_eq!(text, "Hallo Welt.");
+}
+
+#[test]
+fn a_pizora_response_without_content_is_an_error() {
+    assert!(PizoraCleaner::extract_text(r#"{"error":{"code":"insufficient_quota"}}"#).is_err());
+    assert!(PizoraCleaner::extract_text("not json").is_err());
 }

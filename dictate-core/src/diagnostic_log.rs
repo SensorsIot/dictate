@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::error::Error;
-use crate::model::{LanguageMode, OverlayPosition, UtteranceStatus};
+use crate::model::{CleanupProvider, LanguageMode, OverlayPosition, UtteranceStatus};
 use crate::truncate;
 
 /// A value that can appear in a log field.
@@ -159,4 +159,4 @@ macro_rules! display_log_value {
     };
 }
 
-display_log_value!(i32, i64, u16, u32, u64, usize, UtteranceStatus, LanguageMode, OverlayPosition);
+display_log_value!(i32, i64, u16, u32, u64, usize, UtteranceStatus, LanguageMode, OverlayPosition, CleanupProvider);

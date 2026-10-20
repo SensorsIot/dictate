@@ -1,4 +1,5 @@
-//! Collects the two API keys and stores them in Credential Manager.
+//! Collects the two API keys and stores them in Credential Manager. The second
+//! is for whichever cleanup provider config.json selects.
 //!
 //! A window rather than a console prompt because this ships as a GUI
 //! executable: it has no console to read from.
@@ -22,13 +23,16 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WS_TABSTOP, WS_VISIBLE,
 };
 
+use dictate_core::{CleanupProvider, DictateConfig};
+
 use crate::credentials;
+use crate::paths;
 use crate::win::{instance, loword, message_box, wide};
 
 const ID_SAVE: i32 = 1; // IDOK: what Enter sends
 const ID_CANCEL: i32 = 2; // IDCANCEL: what Escape sends
 const ID_ELEVENLABS: i32 = 101;
-const ID_ANTHROPIC: i32 = 102;
+const ID_CLEANUP: i32 = 102;
 const ID_NOTE: i32 = 103;
 
 const ES_PASSWORD: u32 = 0x0020;
@@ -133,7 +137,8 @@ unsafe fn run() -> bool {
     };
 
     let existing_elevenlabs = credentials::read(credentials::ELEVENLABS).unwrap_or_default();
-    let existing_anthropic = credentials::read(credentials::ANTHROPIC).unwrap_or_default();
+    let provider = cleanup_provider();
+    let existing_cleanup = credentials::read(credentials::cleanup_target(provider)).unwrap_or_default();
 
     control(
         "STATIC",
@@ -148,15 +153,16 @@ unsafe fn run() -> bool {
         WS_EX_CLIENTEDGE,
         140, 55, 300, 23, ID_ELEVENLABS,
     );
-    control("STATIC", "Anthropic key", 0, 0, 12, 92, 120, 20, 0);
+    control("STATIC", &format!("{provider} key"), 0, 0, 12, 92, 120, 20, 0);
     control(
         "EDIT",
-        &existing_anthropic,
+        &existing_cleanup,
         WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL,
         WS_EX_CLIENTEDGE,
-        140, 89, 300, 23, ID_ANTHROPIC,
+        140, 89, 300, 23, ID_CLEANUP,
     );
-    control("STATIC", "Leave the Anthropic key blank to dictate without cleanup.", 0, 0, 140, 116, 300, 20, ID_NOTE);
+    let note = format!("Leave the {provider} key blank to dictate without cleanup.");
+    control("STATIC", &note, 0, 0, 140, 116, 300, 20, ID_NOTE);
     control("BUTTON", "Save", WS_TABSTOP | BS_DEFPUSHBUTTON, 0, 264, 158, 85, 28, ID_SAVE);
     control("BUTTON", "Cancel", WS_TABSTOP, 0, 355, 158, 85, 28, ID_CANCEL);
 
@@ -192,6 +198,12 @@ unsafe fn run() -> bool {
     saved
 }
 
+/// A config file that does not parse is reported at startup; here it only
+/// means asking for the default provider's key.
+fn cleanup_provider() -> CleanupProvider {
+    DictateConfig::load(&paths::config_file()).map(|config| config.cleanup_provider).unwrap_or_default()
+}
+
 unsafe fn text_of(control: HWND) -> String {
     let length = GetWindowTextLengthW(control);
     if length <= 0 {
@@ -215,14 +227,15 @@ unsafe fn save(hwnd: HWND) {
         return;
     }
 
-    let anthropic = text_of(GetDlgItem(hwnd, ID_ANTHROPIC)).trim().to_owned();
+    let cleanup = text_of(GetDlgItem(hwnd, ID_CLEANUP)).trim().to_owned();
+    let cleanup_target = credentials::cleanup_target(cleanup_provider());
 
     let stored = credentials::write(credentials::ELEVENLABS, &elevenlabs).and_then(|()| {
-        if anthropic.is_empty() {
-            credentials::delete(credentials::ANTHROPIC);
+        if cleanup.is_empty() {
+            credentials::delete(cleanup_target);
             Ok(())
         } else {
-            credentials::write(credentials::ANTHROPIC, &anthropic)
+            credentials::write(cleanup_target, &cleanup)
         }
     });
 
