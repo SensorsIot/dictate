@@ -904,12 +904,23 @@ FR-8.4 (`SuppressHotkey`) and FR-8.8 do not apply on macOS.
 **FR-22.3** [Must] `[derived]` A press whose release is never delivered shall be
 released once the hardware has read the key as up three times running, 100 ms
 apart, and logged with `reason=Reconciled`. A key still held shall never be
-released.
+released. A modifier is read by its own side's device flag, an F-key by its key
+code.
 
 > macOS stops delivering keystrokes to observers while a password field has
 > secure input, and disables an observer it considers slow; either can swallow
 > the release. This is FR-8.7's purpose, with the bound set by the watchdog
 > rather than the keyboard repeat rate.
+>
+> The hardware key state reports both sides of a modifier under one key code:
+> Right Ctrl held reads as key 59 (Left Ctrl) down and key 62 up. Only the
+> device flag (`0x2000` for Right Ctrl) tells the sides apart, and it is the
+> same bit the press itself is recognised by.
+>
+> **VC** — *Pre:* `Idle`, `HotkeyVirtualKey` set to Right Ctrl (`163`).
+> *Stimulus:* hold the hotkey for 3 s and speak. *Expect:* exactly one session,
+> `held≈3000ms`, `reason=Released`. *Must not:* `reason=Reconciled` while the
+> key is held. *Tier:* desktop-mac.
 
 **FR-22.4** [Must] `[derived]` A press is recorded as `injected` when its event
 names a source process. dictate's own keystrokes carry a signature and are

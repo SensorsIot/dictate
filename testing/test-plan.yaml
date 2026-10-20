@@ -405,6 +405,23 @@ tests:
     status: designed
     last_result: never_run
 
+  - id: DM-04
+    name: A held right-side modifier is never reconciled as released on the Mac
+    kind: atomic
+    scenario: negative
+    tier: desktop-mac
+    verifies: [FR-22.1, FR-22.3]
+    procedure: >
+      Set EnableDiagnosticLog true. With HotkeyVirtualKey 163 (Right Ctrl),
+      then 92 (Right Command), then 165 (Right Option), restart dictate and
+      hold the hotkey for 3 s while speaking.
+    expect: >
+      For each key one session, recording.stop reason=Released held≈3000ms,
+      and the sentence typed.
+    must_not: recording.stop reason=Reconciled while the key is held
+    status: designed
+    last_result: never_run
+
   # ---- desktop tier ----------------------------------------------------------
 
   - id: DT-01

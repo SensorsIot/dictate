@@ -189,12 +189,23 @@ fn watchdog() {
             continue;
         }
 
-        let held = unsafe { CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, KEYCODE.load(Ordering::SeqCst)) };
-        up_reads = if held { 0 } else { up_reads + 1 };
+        up_reads = if held() { 0 } else { up_reads + 1 };
 
         if up_reads >= WATCHDOG_READS && DOWN.swap(false, Ordering::SeqCst) {
             up_reads = 0;
             app::post(|| app::on_release(StopReason::Reconciled));
         }
+    }
+}
+
+/// The hardware's view of the hotkey. The key state reports both sides of a
+/// modifier under the left key's code, so a right-side modifier would always
+/// read as up; its device flag is the only reading that tells the sides apart.
+fn held() -> bool {
+    let flag = FLAG.load(Ordering::SeqCst);
+    if flag != 0 {
+        unsafe { CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState) & flag != 0 }
+    } else {
+        unsafe { CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, KEYCODE.load(Ordering::SeqCst)) }
     }
 }

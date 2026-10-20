@@ -128,6 +128,7 @@ extern "C" {
     pub fn CGEventKeyboardSetUnicodeString(event: CGEventRef, length: usize, string: *const u16);
     pub fn CGEventPost(tap: u32, event: CGEventRef);
     pub fn CGEventSourceKeyState(state: i32, key: CGKeyCode) -> bool;
+    pub fn CGEventSourceFlagsState(state: i32) -> CGEventFlags;
     pub fn CGPreflightListenEventAccess() -> bool;
     pub fn CGRequestListenEventAccess() -> bool;
     pub fn CGWindowListCopyWindowInfo(option: u32, relative_to_window: u32) -> CFArrayRef;
