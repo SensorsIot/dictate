@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
 use crate::error::Error;
-use crate::model::{CleanupProvider, LanguageMode, OverlayPosition};
+use crate::model::{LanguageMode, OverlayPosition};
 
 /// Field order is the order `save` writes. The rationale for each default is
 /// in FSD Appendix A and beside the requirement it serves.
@@ -45,11 +45,7 @@ pub struct DictateConfig {
     /// Write German the Swiss way: ss, never ß (FR-11.11).
     pub swiss_spelling: bool,
     pub scribe_model_id: String,
-    /// Which service cleans up (FR-11.1). Each has its own stored key.
-    pub cleanup_provider: CleanupProvider,
-    /// None means the provider's default model — so switching provider does
-    /// not leave a Claude model name pointed at Pizora, or the reverse.
-    pub cleanup_model: Option<String>,
+    pub cleanup_model: String,
     pub scribe_timeout_seconds: i32,
     pub cleanup_timeout_seconds: i32,
     /// Terms Scribe reliably gets wrong. Keep it short — it rides in every request.
@@ -79,8 +75,7 @@ impl Default for DictateConfig {
             language: LanguageMode::Auto,
             swiss_spelling: true,
             scribe_model_id: "scribe_v2".into(),
-            cleanup_provider: CleanupProvider::Anthropic,
-            cleanup_model: None,
+            cleanup_model: "claude-haiku-4-5".into(),
             scribe_timeout_seconds: 15,
             cleanup_timeout_seconds: 10,
             vocabulary: [
@@ -100,15 +95,6 @@ impl Default for DictateConfig {
 }
 
 impl DictateConfig {
-    /// The model cleanup actually asks for.
-    pub fn effective_cleanup_model(&self) -> &str {
-        self.cleanup_model
-            .as_deref()
-            .map(str::trim)
-            .filter(|model| !model.is_empty())
-            .unwrap_or_else(|| self.cleanup_provider.default_model())
-    }
-
     pub fn load(path: &Path) -> Result<Self, Error> {
         if !path.exists() {
             return Ok(Self::default());

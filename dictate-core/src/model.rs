@@ -79,30 +79,6 @@ pub enum OverlayPosition {
 
 named_enum!(OverlayPosition { BottomRight, BottomLeft, TopRight, TopLeft, NearCursor });
 
-/// Who cleans up the transcript. Both see the same prompt; they differ only
-/// in wire format and in where the text is processed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CleanupProvider {
-    /// Claude through the Anthropic Messages API.
-    #[default]
-    Anthropic,
-    /// Pizora by AlpineAI: an OpenAI-compatible API hosted in Switzerland.
-    Pizora,
-}
-
-named_enum!(CleanupProvider { Anthropic, Pizora });
-
-impl CleanupProvider {
-    /// The model used when `CleanupModel` is not set — the cheap, fast tier of
-    /// each provider, because cleanup sits inside a push-to-talk loop.
-    pub fn default_model(self) -> &'static str {
-        match self {
-            CleanupProvider::Anthropic => "claude-haiku-4-5",
-            CleanupProvider::Pizora => "pizora/bernina-1",
-        }
-    }
-}
-
 /// Which language Scribe should assume for an utterance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LanguageMode {

@@ -1,4 +1,4 @@
-use dictate_core::{CleanupProvider, DictateConfig, LanguageMode, OverlayPosition};
+use dictate_core::{DictateConfig, LanguageMode, OverlayPosition};
 
 #[test]
 fn defaults_match_the_configuration_catalogue() {
@@ -14,9 +14,7 @@ fn defaults_match_the_configuration_catalogue() {
     assert!(config.swiss_spelling);
     assert_eq!(config.input_device, None);
     assert_eq!(config.scribe_model_id, "scribe_v2");
-    assert_eq!(config.cleanup_provider, CleanupProvider::Anthropic);
-    assert_eq!(config.cleanup_model, None);
-    assert_eq!(config.effective_cleanup_model(), "claude-haiku-4-5");
+    assert_eq!(config.cleanup_model, "claude-haiku-4-5");
     assert_eq!(config.silence_threshold, 200);
     assert!(!config.enable_diagnostic_log);
     assert_eq!(config.overlay_position, OverlayPosition::BottomRight);
@@ -108,21 +106,4 @@ fn save_and_load_round_trip() {
 
     assert_eq!(loaded, config);
     assert!(written.contains("\"Language\": \"English\""), "PascalCase keys, enum names: {written}");
-}
-
-#[test]
-fn the_cleanup_model_follows_the_provider_unless_set() {
-    // FR-11.1, FR-11.2 (H-22). Switching provider must not send a Claude model
-    // name to Pizora.
-    let pizora = DictateConfig::parse(r#"{ "cleanupprovider": "pizora" }"#).unwrap();
-    assert_eq!(pizora.cleanup_provider, CleanupProvider::Pizora);
-    assert_eq!(pizora.effective_cleanup_model(), "pizora/bernina-1");
-
-    let pinned = DictateConfig::parse(r#"{ "CleanupProvider": "Pizora", "CleanupModel": "pizora/dom-1" }"#).unwrap();
-    assert_eq!(pinned.effective_cleanup_model(), "pizora/dom-1");
-
-    let blank = DictateConfig::parse(r#"{ "CleanupModel": "  " }"#).unwrap();
-    assert_eq!(blank.effective_cleanup_model(), "claude-haiku-4-5");
-
-    assert!(DictateConfig::parse(r#"{ "CleanupProvider": "OpenAI" }"#).is_err());
 }

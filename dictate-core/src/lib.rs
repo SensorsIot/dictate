@@ -20,11 +20,11 @@ pub mod session;
 pub mod text_sanitizer;
 pub mod wav;
 
-pub use cleaner::{Cleaner, HaikuCleaner, PassthroughCleaner, PizoraCleaner};
+pub use cleaner::{Cleaner, HaikuCleaner, PassthroughCleaner};
 pub use config::DictateConfig;
 pub use diagnostic_log::{field, DiagnosticLog, Field, LogValue};
 pub use error::Error;
-pub use model::{CleanupProvider, LanguageMode, OverlayPosition, TargetContext, Transcript, Utterance, UtteranceStatus};
+pub use model::{LanguageMode, OverlayPosition, TargetContext, Transcript, Utterance, UtteranceStatus};
 pub use pipeline::DictationPipeline;
 pub use recent::RecentUtterances;
 pub use scribe::{ScribeTranscriber, Transcriber};

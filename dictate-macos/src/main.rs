@@ -41,7 +41,9 @@ fn start() -> i32 {
     use std::fs::{self, OpenOptions};
     use std::time::Duration;
 
-    use dictate_core::{cleaner, DiagnosticLog, DictateConfig, DictationPipeline, ScribeTranscriber};
+    use dictate_core::{
+        Cleaner, DiagnosticLog, DictateConfig, DictationPipeline, HaikuCleaner, PassthroughCleaner, ScribeTranscriber,
+    };
 
     use crate::auth::alert;
 
@@ -101,15 +103,16 @@ fn start() -> i32 {
         }
     };
 
-    // FR-11.10: no cleanup key is a degraded mode, not a failure — you still
-    // get dictation, just verbatim.
-    let cleanup_key = credentials::read(credentials::cleanup_account(config.cleanup_provider));
-    let cleaner = match cleaner::for_config(cleanup_key, &config) {
-        Ok(cleaner) => cleaner,
-        Err(error) => {
-            alert(&format!("dictate could not start:\n\n{error}"));
-            return 4;
-        }
+    // FR-11.10: no Anthropic key is a degraded mode, not a failure.
+    let cleaner: Box<dyn Cleaner> = match credentials::read(credentials::ANTHROPIC) {
+        Some(key) => match HaikuCleaner::new(key, &config) {
+            Ok(cleaner) => Box::new(cleaner),
+            Err(error) => {
+                alert(&format!("dictate could not start:\n\n{error}"));
+                return 4;
+            }
+        },
+        None => Box::new(PassthroughCleaner),
     };
 
     let pipeline = DictationPipeline::new(Box::new(transcriber), cleaner, config.clone());

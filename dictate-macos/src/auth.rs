@@ -1,5 +1,4 @@
-//! Collects the two API keys and stores them in the Keychain. The second is
-//! for whichever cleanup provider config.json selects.
+//! Collects the two API keys and stores them in the Keychain.
 //!
 //! The dialogs are AppleScript's, shown by `osascript`: a native prompt with a
 //! hidden-answer field and no window code of our own. The key comes back on
@@ -7,10 +6,7 @@
 
 use std::process::Command;
 
-use dictate_core::DictateConfig;
-
 use crate::credentials;
-use crate::paths;
 
 /// Asks for both keys. Returns true if the ElevenLabs key was stored. Blocks
 /// until the user answers, so it never runs on the main thread once the menu
@@ -27,14 +23,9 @@ pub fn prompt() -> bool {
         return false;
     }
 
-    // A config file that does not parse is reported at startup; here it only
-    // means asking for the default provider's key.
-    let provider = DictateConfig::load(&paths::config_file()).map(|config| config.cleanup_provider).unwrap_or_default();
-    let cleanup = ask(
-        &format!(
-            "{provider} API key (optional).\n\nWithout it, dictate types the transcript verbatim, without cleanup. \
-             Leave empty to skip."
-        ),
+    let anthropic = ask(
+        "Anthropic API key (optional).\n\nWithout it, dictate types the transcript verbatim, without cleanup. \
+         Leave empty to skip.",
         false,
     )
     .unwrap_or_default();
@@ -44,10 +35,9 @@ pub fn prompt() -> bool {
         return false;
     }
 
-    let account = credentials::cleanup_account(provider);
-    if cleanup.is_empty() {
-        credentials::delete(account);
-    } else if let Err(error) = credentials::write(account, &cleanup) {
+    if anthropic.is_empty() {
+        credentials::delete(credentials::ANTHROPIC);
+    } else if let Err(error) = credentials::write(credentials::ANTHROPIC, &anthropic) {
         alert(&error);
     }
 

@@ -72,7 +72,7 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
             field("keepMicOpen", config.keep_microphone_open),
             field("input", config.input_device.as_deref().unwrap_or("system default")),
             field("ignoreInjected", config.ignore_injected_hotkey),
-            field("cleanup", format!("{} {}", config.cleanup_provider, config.effective_cleanup_model())),
+            field("cleanup", config.cleanup_model.as_str()),
         ],
     );
 
