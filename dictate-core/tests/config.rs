@@ -110,3 +110,19 @@ fn save_and_load_round_trip() {
     assert_eq!(loaded, config);
     assert!(written.contains("\"Language\": \"English\""), "PascalCase keys, enum names: {written}");
 }
+
+#[test]
+fn only_a_short_suppressed_press_is_handed_back() {
+    // FR-8.9 (H-24). Must not: a replay when the key already reached the system
+    // — Caps Lock would toggle twice and end up unchanged.
+    use std::time::Duration;
+
+    let config = DictateConfig { short_press_passes_through: true, ..DictateConfig::default() };
+    assert!(config.replays_tap(Duration::from_millis(120)));
+    assert!(!config.replays_tap(Duration::from_millis(300)), "a held key dictates");
+
+    let unsuppressed = DictateConfig { suppress_hotkey: false, ..config.clone() };
+    assert!(!unsuppressed.replays_tap(Duration::from_millis(120)));
+
+    assert!(!DictateConfig::default().replays_tap(Duration::from_millis(120)), "off by default");
+}

@@ -439,6 +439,18 @@ shall close it and say why it cannot hear the hotkey there.
 > on the taskbar. *Must not:* closing a Start menu opened from an ordinary
 > window. *Tier:* desktop.
 
+**FR-8.9** [Should] `[user]` With `ShortPressPassesThrough` on (default off)
+and the hotkey suppressed, a press released before `MinimumHoldMs` shall be
+replayed to the system as one tap of the same key, stamped as dictate's own
+input (FR-8.3). A held press dictates as before. A release synthesised by
+FR-8.7 is not replayed. Windows only.
+
+> So a hotkey on a key with a function of its own keeps it on a tap: Caps Lock
+> still toggles, and a long press dictates. The tap's effect arrives at release
+> rather than at press. *Must not:* a replay when the key was not suppressed —
+> it already reached the system, and Caps Lock would toggle back. *Tier:* host
+> (H-24) for the decision; desktop for the replay.
+
 ## 9. Audio capture
 
 **FR-9.1** [Must] `[derived]` Captured audio shall be 16 kHz, mono, 16-bit PCM.
@@ -975,6 +987,7 @@ macOS; **System Settings → General → Login Items** starts it at login.
 | `HotkeyVirtualKey` | int | `0x5C` (Right Windows; Right Command on macOS) | FR-8.1, FR-22.1 |
 | `SuppressHotkey` | bool | `true` (no effect on macOS) | FR-8.4 |
 | `IgnoreInjectedHotkey` | bool | `false` | FR-8.6 |
+| `ShortPressPassesThrough` | bool | `false` | FR-8.9 |
 | `MinimumHoldMs` | int | `300` | FR-5.2 |
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
 | `Language` | enum | `Auto` | FR-10.3, FR-10.8 |

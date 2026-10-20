@@ -314,6 +314,17 @@ tests:
     status: implemented
     last_result: never_run
 
+  - id: H-24
+    name: Only a short, suppressed, released press is handed back to the system
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: dictate-core/tests/config.rs
+    verifies: [FR-8.9]
+    must_not: a replay of a press that was not suppressed
+    status: implemented
+    last_result: never_run
+
   # ---- ci tier ---------------------------------------------------------------
 
   - id: C-01

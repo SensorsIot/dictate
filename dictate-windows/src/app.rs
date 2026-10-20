@@ -254,7 +254,22 @@ fn handle(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LR
         }
         WM_HOTKEY_UP => {
             let reason = if wparam == hotkey::RELEASE_RECONCILED { StopReason::Reconciled } else { StopReason::Released };
-            with_app(|app| app.session.end(reason));
+            // FR-8.9: decided before `end`, from the hook's own press time, so a
+            // tap during a transcription still gets its key back. A reconciled
+            // release is a guess about a key-up we never saw; it is not replayed.
+            let held = hotkey::pressed_at().map(|at| at.elapsed());
+            with_app(|app| {
+                let config = &app.session.config;
+                let replay = reason == StopReason::Released && held.is_some_and(|held| config.replays_tap(held));
+                let virtual_key = config.hotkey_virtual_key as u16;
+                app.session.end(reason);
+                if replay {
+                    // Stamped with the injection signature, so the hook lets it
+                    // through instead of starting another session.
+                    let sent = injector::tap_key(virtual_key);
+                    app.session.log.event("hotkey.passedThrough", &[field("sent", sent)]);
+                }
+            });
         }
         WM_HOTKEY_REJECTED => {
             with_app(|app| {

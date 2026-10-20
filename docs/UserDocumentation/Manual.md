@@ -151,6 +151,7 @@ fires on the right Ctrl.
 | **Right Windows** | **`92`** | The default. Needs `SuppressHotkey`, which is on by default. Nothing else competes for it |
 | Left Alt | `164` | Opens the menu bar of the focused window on its own |
 | Right Alt | `165` | **Do not use.** On a Swiss keyboard this is AltGr, and you would lose `@ { } [ ] \` |
+| **Caps Lock** | **`20`** | The choice for laptops without a right Windows key: on the left and easy to hold. With `"ShortPressPassesThrough": true` a quick tap still toggles Caps Lock and only a hold dictates |
 | Scroll Lock | `145` | Genuinely unused on modern machines, but absent from many compact keyboards |
 
 **A Windows key requires `"SuppressHotkey": true` in the same edit.** Pressing
@@ -158,6 +159,11 @@ and releasing either Windows key with nothing in between opens the Start menu, s
 without suppression you get the Start menu on every dictation. Suppression stops
 the key reaching the shell — at the price of every Win+*key* shortcut made with
 that hand. On the right Windows key that price is usually zero.
+
+**`ShortPressPassesThrough`** (default `false`) gives a hotkey back its own
+function on a quick tap: a press shorter than `MinimumHoldMs` (300 ms) is passed
+on to Windows as a normal keystroke after you let go. Use it with Caps Lock.
+With a Windows key it would open the Start menu on every tap. Windows only.
 
 Not every keyboard has a right Windows key; compact and some gaming models
 replace it with `Fn`. If dictation stops responding after the change, that is the

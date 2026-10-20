@@ -8,6 +8,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
@@ -29,6 +30,10 @@ pub struct DictateConfig {
     /// Ignore synthesised hotkey presses. Off: remote-desktop tools deliver
     /// genuine keystrokes as synthetic input too.
     pub ignore_injected_hotkey: bool,
+    /// A press shorter than `MinimumHoldMs` is handed back to Windows as an
+    /// ordinary keystroke, so the hotkey keeps its own function on a tap —
+    /// Caps Lock still toggles (FR-8.9). Only meaningful with `SuppressHotkey`.
+    pub short_press_passes_through: bool,
     pub minimum_hold_ms: i32,
     pub maximum_recording_seconds: i32,
     /// Peak amplitude (0–32767) below which a recording counts as silence.
@@ -77,6 +82,7 @@ impl Default for DictateConfig {
             hotkey_virtual_key: 0x5C,
             suppress_hotkey: true,
             ignore_injected_hotkey: false,
+            short_press_passes_through: false,
             minimum_hold_ms: 300,
             maximum_recording_seconds: 120,
             silence_threshold: 200,
@@ -112,6 +118,13 @@ impl Default for DictateConfig {
 }
 
 impl DictateConfig {
+    /// Whether a released press of this length should be replayed to the
+    /// system (FR-8.9). Without suppression the key already reached it, and
+    /// replaying would act twice — Caps Lock would toggle back.
+    pub fn replays_tap(&self, held: Duration) -> bool {
+        self.suppress_hotkey && self.short_press_passes_through && held.as_millis() < self.minimum_hold_ms.max(0) as u128
+    }
+
     /// The model transcription actually asks for.
     pub fn effective_transcription_model(&self) -> &str {
         let fallback = match self.transcription_provider {
