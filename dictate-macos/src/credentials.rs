@@ -3,11 +3,21 @@
 //! account names are part of the stored data: changing them orphans every key
 //! a user has already saved.
 
+use dictate_core::Credential;
 use security_framework::passwords::{delete_generic_password, get_generic_password, set_generic_password};
 
 const SERVICE: &str = "dictate";
 pub const ELEVENLABS: &str = "elevenlabs";
 pub const ANTHROPIC: &str = "anthropic";
+pub const INFOMANIAK: &str = "infomaniak";
+
+pub fn account(credential: Credential) -> &'static str {
+    match credential {
+        Credential::ElevenLabs => ELEVENLABS,
+        Credential::Anthropic => ANTHROPIC,
+        Credential::Infomaniak => INFOMANIAK,
+    }
+}
 
 pub fn read(account: &str) -> Option<String> {
     let bytes = get_generic_password(SERVICE, account).ok()?;

@@ -47,11 +47,8 @@ fn main() {
 #[cfg(windows)]
 fn start() -> i32 {
     use std::ptr::{null, null_mut};
-    use std::time::Duration;
 
-    use dictate_core::{
-        Cleaner, DiagnosticLog, DictateConfig, DictationPipeline, HaikuCleaner, PassthroughCleaner, ScribeTranscriber,
-    };
+    use dictate_core::{providers, DiagnosticLog, DictateConfig, DictationPipeline};
     use windows_sys::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
     use windows_sys::Win32::System::Threading::CreateMutexW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING};
@@ -93,44 +90,21 @@ fn start() -> i32 {
         }
     };
 
-    let elevenlabs_key = match credentials::read(credentials::ELEVENLABS) {
-        Some(key) => key,
-        None => {
-            if !auth::prompt() {
-                return 3;
-            }
-            match credentials::read(credentials::ELEVENLABS) {
-                Some(key) => key,
-                None => return 3,
-            }
-        }
-    };
+    // The transcription provider's key is the one dictate cannot run without.
+    let transcription_key = credentials::target(config.transcription_provider.credential());
+    if credentials::read(transcription_key).is_none() && (!auth::prompt() || credentials::read(transcription_key).is_none()) {
+        return 3;
+    }
 
-    // Belt to the pipeline's braces: this bounds the socket, the pipeline
-    // bounds the wait.
-    let scribe_timeout = Duration::from_secs(config.scribe_timeout_seconds.max(1) as u64 + 5);
-    let transcriber = match ScribeTranscriber::new(elevenlabs_key, config.scribe_model_id.clone(), scribe_timeout) {
-        Ok(transcriber) => transcriber,
+    let (transcriber, cleaner) = match providers::build(&config, |c| credentials::read(credentials::target(c))) {
+        Ok(services) => services,
         Err(error) => {
             fatal(&format!("dictate could not start:\n\n{error}"));
             return 4;
         }
     };
 
-    // FR-11.10: no Anthropic key is a degraded mode, not a failure — you still
-    // get dictation, just verbatim.
-    let cleaner: Box<dyn Cleaner> = match credentials::read(credentials::ANTHROPIC) {
-        Some(key) => match HaikuCleaner::new(key, &config) {
-            Ok(cleaner) => Box::new(cleaner),
-            Err(error) => {
-                fatal(&format!("dictate could not start:\n\n{error}"));
-                return 4;
-            }
-        },
-        None => Box::new(PassthroughCleaner),
-    };
-
-    let pipeline = DictationPipeline::new(Box::new(transcriber), cleaner, config.clone());
+    let pipeline = DictationPipeline::new(transcriber, cleaner, config.clone());
 
     let log = if config.enable_diagnostic_log {
         match DiagnosticLog::open_file(&paths::log_file(), 2 * 1024 * 1024) {

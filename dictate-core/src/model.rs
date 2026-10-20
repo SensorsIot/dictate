@@ -79,6 +79,78 @@ pub enum OverlayPosition {
 
 named_enum!(OverlayPosition { BottomRight, BottomLeft, TopRight, TopLeft, NearCursor });
 
+/// An API key dictate stores. The platform heads map each to a Credential
+/// Manager target or Keychain account; the name doubles as its label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Credential {
+    ElevenLabs,
+    Anthropic,
+    Infomaniak,
+}
+
+named_enum!(Credential { ElevenLabs, Anthropic, Infomaniak });
+
+/// Who turns speech into text (FR-10.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TranscriptionProvider {
+    /// ElevenLabs Scribe. The best on German and English mixed in one sentence.
+    #[default]
+    ElevenLabs,
+    /// Infomaniak AI Services (Whisper), hosted in Switzerland. Slower: the
+    /// API is asynchronous, so every utterance waits on a result poll.
+    Infomaniak,
+}
+
+named_enum!(TranscriptionProvider { ElevenLabs, Infomaniak });
+
+impl TranscriptionProvider {
+    pub fn credential(self) -> Credential {
+        match self {
+            TranscriptionProvider::ElevenLabs => Credential::ElevenLabs,
+            TranscriptionProvider::Infomaniak => Credential::Infomaniak,
+        }
+    }
+
+    /// The model used when `TranscriptionModel` is not set.
+    pub fn default_model(self) -> &'static str {
+        match self {
+            TranscriptionProvider::ElevenLabs => "scribe_v2",
+            TranscriptionProvider::Infomaniak => "whisper",
+        }
+    }
+}
+
+/// Who cleans up the transcript (FR-11.1). Both get the same prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CleanupProvider {
+    /// Claude through the Anthropic Messages API.
+    #[default]
+    Anthropic,
+    /// Infomaniak AI Services, an OpenAI-compatible API hosted in Switzerland.
+    Infomaniak,
+}
+
+named_enum!(CleanupProvider { Anthropic, Infomaniak });
+
+impl CleanupProvider {
+    pub fn credential(self) -> Credential {
+        match self {
+            CleanupProvider::Anthropic => Credential::Anthropic,
+            CleanupProvider::Infomaniak => Credential::Infomaniak,
+        }
+    }
+
+    /// The model used when `CleanupModel` is not set. Gemma, not Infomaniak's
+    /// smaller Ministral: in testing Ministral translated the English half of
+    /// a mixed sentence and Mistral Small answered a question (FR-11.4/11.5).
+    pub fn default_model(self) -> &'static str {
+        match self {
+            CleanupProvider::Anthropic => "claude-haiku-4-5",
+            CleanupProvider::Infomaniak => "google/gemma-4-31B-it",
+        }
+    }
+}
+
 /// Which language Scribe should assume for an utterance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LanguageMode {

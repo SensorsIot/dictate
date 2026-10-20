@@ -10,10 +10,21 @@ use windows_sys::Win32::Security::Credentials::{
     CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC,
 };
 
+use dictate_core::Credential;
+
 use crate::win::wide;
 
 pub const ELEVENLABS: &str = "dictate:elevenlabs";
 pub const ANTHROPIC: &str = "dictate:anthropic";
+pub const INFOMANIAK: &str = "dictate:infomaniak";
+
+pub fn target(credential: Credential) -> &'static str {
+    match credential {
+        Credential::ElevenLabs => ELEVENLABS,
+        Credential::Anthropic => ANTHROPIC,
+        Credential::Infomaniak => INFOMANIAK,
+    }
+}
 
 pub fn read(target: &str) -> Option<String> {
     let target = wide(target);

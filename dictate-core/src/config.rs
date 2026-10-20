@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
 use crate::error::Error;
-use crate::model::{LanguageMode, OverlayPosition};
+use crate::model::{CleanupProvider, LanguageMode, OverlayPosition, TranscriptionProvider};
 
 /// Field order is the order `save` writes. The rationale for each default is
 /// in FSD Appendix A and beside the requirement it serves.
@@ -44,8 +44,21 @@ pub struct DictateConfig {
     pub language: LanguageMode,
     /// Write German the Swiss way: ss, never ß (FR-11.11).
     pub swiss_spelling: bool,
+    /// Who transcribes (FR-10.1). Each provider has its own stored key.
+    pub transcription_provider: TranscriptionProvider,
+    /// None means the provider's default; for ElevenLabs that is `ScribeModelId`.
+    pub transcription_model: Option<String>,
+    /// The ElevenLabs model. Kept from before providers existed, so existing
+    /// files keep working; `TranscriptionModel` overrides it.
     pub scribe_model_id: String,
-    pub cleanup_model: String,
+    /// Who cleans up (FR-11.1).
+    pub cleanup_provider: CleanupProvider,
+    /// None means the provider's default model, so switching provider never
+    /// sends a Claude model name to Infomaniak, or the reverse.
+    pub cleanup_model: Option<String>,
+    /// Infomaniak AI Services product. None: looked up from the token on first
+    /// use, which is right for the usual single-product account.
+    pub infomaniak_product_id: Option<u64>,
     pub scribe_timeout_seconds: i32,
     pub cleanup_timeout_seconds: i32,
     /// Terms Scribe reliably gets wrong. Keep it short — it rides in every request.
@@ -74,8 +87,12 @@ impl Default for DictateConfig {
             enable_diagnostic_log: false,
             language: LanguageMode::Auto,
             swiss_spelling: true,
+            transcription_provider: TranscriptionProvider::ElevenLabs,
+            transcription_model: None,
             scribe_model_id: "scribe_v2".into(),
-            cleanup_model: "claude-haiku-4-5".into(),
+            cleanup_provider: CleanupProvider::Anthropic,
+            cleanup_model: None,
+            infomaniak_product_id: None,
             scribe_timeout_seconds: 15,
             cleanup_timeout_seconds: 10,
             vocabulary: [
@@ -95,6 +112,20 @@ impl Default for DictateConfig {
 }
 
 impl DictateConfig {
+    /// The model transcription actually asks for.
+    pub fn effective_transcription_model(&self) -> &str {
+        let fallback = match self.transcription_provider {
+            TranscriptionProvider::ElevenLabs => self.scribe_model_id.as_str(),
+            provider => provider.default_model(),
+        };
+        non_blank(self.transcription_model.as_deref()).unwrap_or(fallback)
+    }
+
+    /// The model cleanup actually asks for.
+    pub fn effective_cleanup_model(&self) -> &str {
+        non_blank(self.cleanup_model.as_deref()).unwrap_or_else(|| self.cleanup_provider.default_model())
+    }
+
     pub fn load(path: &Path) -> Result<Self, Error> {
         if !path.exists() {
             return Ok(Self::default());
@@ -167,6 +198,10 @@ impl DictateConfig {
         fs::write(path, json)?;
         Ok(())
     }
+}
+
+fn non_blank(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|v| !v.is_empty())
 }
 
 /// JSON5 has one number type, and a parser may hand back `300` as `300.0`,

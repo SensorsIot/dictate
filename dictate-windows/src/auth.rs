@@ -1,4 +1,6 @@
-//! Collects the two API keys and stores them in Credential Manager.
+//! Collects the API keys the configured providers need and stores them in
+//! Credential Manager: the transcription key, and the cleanup key if that
+//! provider is a different one.
 //!
 //! A window rather than a console prompt because this ships as a GUI
 //! executable: it has no console to read from.
@@ -22,13 +24,16 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WS_TABSTOP, WS_VISIBLE,
 };
 
+use dictate_core::{Credential, DictateConfig};
+
 use crate::credentials;
+use crate::paths;
 use crate::win::{instance, loword, message_box, wide};
 
 const ID_SAVE: i32 = 1; // IDOK: what Enter sends
 const ID_CANCEL: i32 = 2; // IDCANCEL: what Escape sends
-const ID_ELEVENLABS: i32 = 101;
-const ID_ANTHROPIC: i32 = 102;
+const ID_TRANSCRIPTION: i32 = 101;
+const ID_CLEANUP: i32 = 102;
 const ID_NOTE: i32 = 103;
 
 const ES_PASSWORD: u32 = 0x0020;
@@ -40,6 +45,7 @@ const COLOR_GRAYTEXT: i32 = 17;
 thread_local! {
     static OUTCOME: Cell<Option<bool>> = const { Cell::new(None) };
     static OPEN: Cell<bool> = const { Cell::new(false) };
+    static KEYS: Cell<(Credential, Option<Credential>)> = const { Cell::new((Credential::ElevenLabs, None)) };
 }
 
 /// Shows the dialog and runs its loop. Returns true if keys were saved.
@@ -132,31 +138,42 @@ unsafe fn run() -> bool {
         child
     };
 
-    let existing_elevenlabs = credentials::read(credentials::ELEVENLABS).unwrap_or_default();
-    let existing_anthropic = credentials::read(credentials::ANTHROPIC).unwrap_or_default();
+    let (transcription, cleanup) = configured_keys();
+    KEYS.with(|keys| keys.set((transcription, cleanup)));
+    let existing_transcription = credentials::read(credentials::target(transcription)).unwrap_or_default();
 
     control(
         "STATIC",
         "Keys are stored in Windows Credential Manager, encrypted under your\nWindows account. They are never written to a file.",
         0, 0, 12, 12, 436, 34, 0,
     );
-    control("STATIC", "ElevenLabs key", 0, 0, 12, 58, 120, 20, 0);
+    control("STATIC", &format!("{transcription} key"), 0, 0, 12, 58, 120, 20, 0);
     let first = control(
         "EDIT",
-        &existing_elevenlabs,
+        &existing_transcription,
         WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL,
         WS_EX_CLIENTEDGE,
-        140, 55, 300, 23, ID_ELEVENLABS,
+        140, 55, 300, 23, ID_TRANSCRIPTION,
     );
-    control("STATIC", "Anthropic key", 0, 0, 12, 92, 120, 20, 0);
-    control(
-        "EDIT",
-        &existing_anthropic,
-        WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL,
-        WS_EX_CLIENTEDGE,
-        140, 89, 300, 23, ID_ANTHROPIC,
-    );
-    control("STATIC", "Leave the Anthropic key blank to dictate without cleanup.", 0, 0, 140, 116, 300, 20, ID_NOTE);
+    match cleanup {
+        Some(cleanup) => {
+            let existing_cleanup = credentials::read(credentials::target(cleanup)).unwrap_or_default();
+            control("STATIC", &format!("{cleanup} key"), 0, 0, 12, 92, 120, 20, 0);
+            control(
+                "EDIT",
+                &existing_cleanup,
+                WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL,
+                WS_EX_CLIENTEDGE,
+                140, 89, 300, 23, ID_CLEANUP,
+            );
+            let note = format!("Leave the {cleanup} key blank to dictate without cleanup.");
+            control("STATIC", &note, 0, 0, 140, 116, 300, 20, ID_NOTE);
+        }
+        None => {
+            let note = format!("Cleanup uses the same {transcription} key.");
+            control("STATIC", &note, 0, 0, 140, 89, 300, 20, ID_NOTE);
+        }
+    }
     control("BUTTON", "Save", WS_TABSTOP | BS_DEFPUSHBUTTON, 0, 264, 158, 85, 28, ID_SAVE);
     control("BUTTON", "Cancel", WS_TABSTOP, 0, 355, 158, 85, 28, ID_CANCEL);
 
@@ -203,26 +220,38 @@ unsafe fn text_of(control: HWND) -> String {
     String::from_utf16_lossy(&buffer[..copied.max(0) as usize])
 }
 
-unsafe fn save(hwnd: HWND) {
-    let elevenlabs = text_of(GetDlgItem(hwnd, ID_ELEVENLABS)).trim().to_owned();
+/// The transcription provider's key, and the cleanup provider's when it is a
+/// different one. A config file that does not parse is reported at startup;
+/// here it only means asking for the default providers' keys.
+fn configured_keys() -> (Credential, Option<Credential>) {
+    let config = DictateConfig::load(&paths::config_file()).unwrap_or_default();
+    let transcription = config.transcription_provider.credential();
+    let cleanup = config.cleanup_provider.credential();
+    (transcription, (cleanup != transcription).then_some(cleanup))
+}
 
-    if elevenlabs.is_empty() {
-        message_box(
-            hwnd,
-            "An ElevenLabs key is required — without it there is nothing to transcribe with.",
-            MB_ICONWARNING,
-        );
+unsafe fn save(hwnd: HWND) {
+    let (transcription, cleanup) = KEYS.with(Cell::get);
+    let key = text_of(GetDlgItem(hwnd, ID_TRANSCRIPTION)).trim().to_owned();
+
+    if key.is_empty() {
+        let warning = format!("A {transcription} key is required — without it there is nothing to transcribe with.");
+        message_box(hwnd, &warning, MB_ICONWARNING);
         return;
     }
 
-    let anthropic = text_of(GetDlgItem(hwnd, ID_ANTHROPIC)).trim().to_owned();
-
-    let stored = credentials::write(credentials::ELEVENLABS, &elevenlabs).and_then(|()| {
-        if anthropic.is_empty() {
-            credentials::delete(credentials::ANTHROPIC);
+    let stored = credentials::write(credentials::target(transcription), &key).and_then(|()| {
+        // Only when the cleanup key has a field of its own: reading a missing
+        // field yields "", which would delete the shared key just written.
+        let Some(cleanup) = cleanup else {
+            return Ok(());
+        };
+        let cleanup_key = text_of(GetDlgItem(hwnd, ID_CLEANUP)).trim().to_owned();
+        if cleanup_key.is_empty() {
+            credentials::delete(credentials::target(cleanup));
             Ok(())
         } else {
-            credentials::write(credentials::ANTHROPIC, &anthropic)
+            credentials::write(credentials::target(cleanup), &cleanup_key)
         }
     });
 

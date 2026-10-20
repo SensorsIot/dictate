@@ -29,7 +29,8 @@ Nothing is saved. No audio file, no transcript, no history on disk.
    ```
 
    You will be asked for an **ElevenLabs** key (speech-to-text) and an
-   **Anthropic** key (cleanup). They are written to Windows Credential Manager,
+   **Anthropic** key (cleanup) — or an **Infomaniak** key if you chose
+   Infomaniak for either (see *Providers* below). They are written to Windows Credential Manager,
    encrypted under your Windows account. They are never written to a file.
 
 4. To start dictate at login, right-click its tray icon and tick **Start with
@@ -43,7 +44,7 @@ elevated process send keystrokes to unelevated windows.
 
 1. Download `dictate-macos.zip` from the same release, unzip it, and move
    `dictate.app` to **Applications**. It runs on Apple Silicon and Intel.
-2. Open it. It asks for the **ElevenLabs** and **Anthropic** keys and stores
+2. Open it. It asks for the **ElevenLabs** and **Anthropic** keys (or **Infomaniak**, see *Providers*) and stores
    them in your login Keychain, never in a file. **Re-enter API keys…** in its
    menu, or `dictate.app/Contents/MacOS/dictate --auth`, asks again.
 3. Allow what macOS asks for, in **System Settings → Privacy & Security**:
@@ -112,6 +113,25 @@ The settings you are most likely to want:
 | `InputDevice` | `null` | Part of the name of the microphone to use, e.g. `"BRIO"` for "Microphone (Logitech BRIO)". Without it, or if nothing matches, dictate uses the Windows default input. Also selectable from the tray menu under **Microphone**, which saves the choice here |
 | `KeepMicrophoneOpen` | `false` | Hold the capture device open. Removes device-open latency, but lights the Windows microphone indicator permanently. When off, the microphone still stays open for 3 s after each dictation, so a quick follow-up press captures at once; your text is not delayed by this |
 | `ExtraConsoleProcesses` | `[]` | Extra terminal executables that must never receive newlines |
+
+### Providers
+
+By default ElevenLabs transcribes and Anthropic (Claude Haiku) cleans up.
+Either can be switched to Infomaniak, which processes everything in
+Switzerland. One Infomaniak token covers both.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `TranscriptionProvider` | `ElevenLabs` | `Infomaniak` for Whisper hosted in Switzerland. Noticeably slower: typically 3–4 s per utterance instead of under 1 s |
+| `CleanupProvider` | `Anthropic` | `Infomaniak` for cleanup hosted in Switzerland |
+| `TranscriptionModel` | provider's default | `scribe_v2` (from `ScribeModelId`) for ElevenLabs, `whisper` for Infomaniak |
+| `CleanupModel` | provider's default | `claude-haiku-4-5` for Anthropic, `google/gemma-4-31B-it` for Infomaniak. Other Infomaniak models tested worse: they translated or answered instead of cleaning |
+| `InfomaniakProductId` | found automatically | Only needed if your Infomaniak account has more than one AI Services product |
+
+Each provider's key is stored separately. After switching, restart dictate and
+use **Re-enter API keys…** once to enter the new provider's key. The Infomaniak
+token is created in the Infomaniak Manager under AI Services; it is shown only
+once.
 
 A malformed `config.json` stops dictate at startup with an error rather than
 silently reverting to defaults — a typo that quietly undid every setting would
@@ -206,7 +226,7 @@ Turn the diagnostic log on first — it answers most of these directly.
 | The first dictation after a pause produces nothing, or only its last words | Look at `mic.firstBuffer` — it says how long the microphone took to deliver anything. A large value means the interface was slow to spin its capture stream up; set `"KeepMicrophoneOpen": true`, at the cost of the microphone indicator staying lit. |
 | A held key produces several short utterances instead of one | Every `recording.stop` will read `reason=Reconciled`. dictate is deciding the key was released while you are still holding it — check that `SuppressHotkey` matches your hotkey, and report it with the log. |
 | The keyboard stops responding, or every key acts as a shortcut | A modifier is stuck down at the system level. Tap the hotkey once to clear it. |
-| Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired Anthropic key. |
+| Text is rough, fillers left in | Cleanup failed and you got the raw transcript — a notification says so. Usually a missing or expired cleanup key (Anthropic or Infomaniak). |
 | A German sentence comes back in English | A bug, not a setting. Cleanup is explicitly instructed never to translate. Please report it. |
 | A term is consistently mis-spelled | Add it to `Vocabulary` in the config. |
 | The hotkey does nothing | Check the tray icon is there. If it is, restart dictate — another application may have taken the low-level hook. |

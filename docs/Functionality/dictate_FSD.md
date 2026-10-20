@@ -59,8 +59,8 @@ language, project split, build strategy, audio stack — is in
 | Uses | Not used | Why |
 |---|---|---|
 | Windows 11 and macOS clients, one shared core | A Linux desktop · a service on the dev VM | The hotkey, the microphone and the target window all live on the desktop the user types at. A container on a headless VM has none of the three. Everything above the operating system is shared (§2.3), so both clients behave the same; Part F lists where macOS differs. |
-| ElevenLabs Scribe | Local faster-whisper · Groq · Deepgram | A stated requirement (FR-10.1). The dev VM has 4 vCPUs and no GPU, so a local model there is not viable. |
-| Claude Haiku 4.5 for cleanup | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. |
+| ElevenLabs Scribe, Infomaniak Whisper as the alternative | Local faster-whisper · Groq · Deepgram | A stated requirement (FR-10.1). The dev VM has 4 vCPUs and no GPU, so a local model there is not viable. Infomaniak keeps audio in Switzerland, at a latency cost (FR-10.7). |
+| Claude Haiku 4.5 for cleanup, Infomaniak as the alternative | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. Infomaniak processes the text in Switzerland (FR-11.1). |
 | Push-to-talk, hold | Toggle · toggle with silence auto-stop | Key release is an unambiguous end-of-utterance signal. No VAD, and no way to leave the microphone hot by accident. |
 | Synthetic typing (`SendInput`) | Clipboard paste with restore · clipboard only | Works in terminals and over RDP without a per-application paste chord, and does not clobber the clipboard as a side effect of delivery. |
 | German + English, auto with a pin | English only · full auto with no override | The user's work mixes both in one sentence, and auto-detection misfires on short utterances. |
@@ -482,12 +482,15 @@ session's text shall not wait for the close.
 
 ## 10. Transcription
 
-**FR-10.1** [Must] `[user]` Audio shall be transcribed by ElevenLabs Scribe via
-`POST https://api.elevenlabs.io/v1/speech-to-text`, authenticated with the
-`xi-api-key` header.
+**FR-10.1** [Must] `[user]` Audio shall be transcribed by the provider
+`TranscriptionProvider` selects: `ElevenLabs` (default), Scribe via
+`POST https://api.elevenlabs.io/v1/speech-to-text` authenticated with the
+`xi-api-key` header; or `Infomaniak`, Whisper through Infomaniak AI Services
+(FR-10.7). FR-10.3 to FR-10.6 describe Scribe.
 
-**FR-10.2** [Must] `[user]` The Scribe model identifier shall be configurable,
-default `scribe_v2`.
+**FR-10.2** [Must] `[user]` The transcription model shall be configurable as
+`TranscriptionModel`. Unset, it is `ScribeModelId` (default `scribe_v2`) for
+ElevenLabs and `whisper` for Infomaniak.
 
 > It stays configurable so a future Scribe generation is a settings change,
 > not a rebuild.
@@ -510,7 +513,23 @@ sent as `false`.
 the response body.
 
 **FR-10.6** [Must] `[derived]` The request shall be abandoned after
-`ScribeTimeoutSeconds` (default 15 s).
+`ScribeTimeoutSeconds` (default 15 s). For Infomaniak the bound covers the
+upload and every result poll together.
+
+**FR-10.7** [Must] `[user]` With `Infomaniak`, the audio shall be submitted to
+`POST https://api.infomaniak.com/1/ai/{product}/openai/audio/transcriptions`
+with a Bearer token, and `GET /1/ai/{product}/results/{batch}` polled until the
+batch succeeds or fails; a failed batch is an error, never an empty transcript.
+`{product}` is `InfomaniakProductId`, or the token's first AI Services product,
+looked up on first use. A pinned `Language` is sent as `language`, and
+`Vocabulary` as Whisper's `prompt`.
+
+> The API is asynchronous and each poll takes about a second on Infomaniak's
+> side, so an utterance typically takes 3–4 s to transcribe (measured
+> 2026-10-20: 2.7–7.7 s), against under 1 s for Scribe. Their API reference says
+> a supplied language "will translate the output"; measured, German audio sent
+> with `en` came back in German, so pinning is safe under FR-11.4. *Tier:* host
+> (H-21) for the requests and parsing; desktop for latency.
 
 > **VC** for FR-10.1/10.3/10.5 — *Pre:* a recorded Scribe response fixture.
 > *Stimulus:* parse it. *Expect:* `text` and `language_code` extracted, whitespace
@@ -519,11 +538,28 @@ the response body.
 
 ## 11. Cleanup
 
-**FR-11.1** [Must] `[user]` The raw transcript shall be cleaned by Claude Haiku
-4.5 through the Anthropic Messages API before delivery.
+**FR-11.1** [Must] `[user]` The raw transcript shall be cleaned before delivery
+by the provider `CleanupProvider` selects: `Anthropic` (default), Claude through
+the Anthropic Messages API; or `Infomaniak`, through the OpenAI-compatible
+`POST https://api.infomaniak.com/2/ai/{product}/openai/v1/chat/completions`,
+with `stream` false and `reasoning_effort` `none`.
 
-**FR-11.2** [Must] `[derived]` The cleanup model identifier shall be configurable,
-default `claude-haiku-4-5`.
+**FR-11.2** [Must] `[derived]` The cleanup model identifier shall be configurable
+as `CleanupModel`. Unset, it is the provider's default: `claude-haiku-4-5` for
+Anthropic, `google/gemma-4-31B-it` for Infomaniak.
+
+> Unset rather than one fixed default, so switching provider never sends a
+> Claude model name to Infomaniak. Gemma because, tested on 2026-10-20,
+> Infomaniak's smaller `Ministral-3-14B` translated the English half of a mixed
+> sentence and `Mistral-Small-4` answered a question it was given to clean —
+> FR-11.4 and FR-11.5 failures. Infomaniak streams and reasons by default; both
+> would only add latency.
+
+**FR-11.13** [Must] `[user]` Each provider's key shall be stored separately, and
+one Infomaniak key serves both transcription and cleanup. Switching provider
+shall neither need nor delete another provider's key. The key prompt asks for
+the transcription provider's key (required) and, if cleanup uses a different
+provider, its key (optional).
 
 **FR-11.3** [Must] `[user]` Cleanup shall remove fillers and false starts, and add
 sentence punctuation and capitalisation.
@@ -564,8 +600,8 @@ target shall be supplied to cleanup so it can adapt formatting.
 **FR-11.9** [Must] `[derived]` The request shall be abandoned after
 `CleanupTimeoutSeconds` (default 10 s), degrading per FR-7.1.
 
-**FR-11.10** [Should] `[derived]` If no Anthropic key is configured, dictation
-shall still work, delivering the verbatim transcript.
+**FR-11.10** [Should] `[derived]` If the cleanup provider has no key
+configured, dictation shall still work, delivering the verbatim transcript.
 
 **FR-11.11** [Must] `[user]` When `SwissSpelling` is on (default), the delivered
 text shall contain no `ß` or `ẞ`; each shall be written `ss` / `SS`. This applies
@@ -648,8 +684,8 @@ needs to act or something went wrong.
 **FR-15.1** [Must] `[user]` API keys shall be stored in Windows Credential
 Manager as generic credentials, and shall not be written to any file.
 
-**FR-15.2** [Must] `[derived]` `dictate --auth` shall prompt for and store both
-keys.
+**FR-15.2** [Must] `[derived]` `dictate --auth` shall prompt for and store the
+keys the configured providers need (FR-11.13).
 
 **FR-15.3** [Must] `[derived]` Keys shall not appear in logs, notifications, the
 tray UI, or error messages.
@@ -714,10 +750,12 @@ keys in memory has no defence, and claiming otherwise would be theatre.
 **Derived.** FR-15.1 (DPAPI, no key file) and FR-17.1 (no dictation content at
 rest) between them mean a stolen profile yields neither the keys nor the history.
 
-**Accepted, not mitigated.** Utterance audio and text traverse two third-party
-services in cleartext-to-them form. That is inherent to using Scribe and
-Haiku (§1.4). Anyone for
-whom that is unacceptable needs a local model, which is a different product.
+**Accepted, not mitigated.** Utterance audio and text traverse third-party
+services in cleartext-to-them form: ElevenLabs and Anthropic by default, or
+Infomaniak in Switzerland for either or both (§1.4). Infomaniak's asynchronous
+API keeps the audio on its servers until the result is collected, for a period
+it does not document. Anyone for whom that is unacceptable needs a local model,
+which is a different product.
 
 ## 19. Performance
 
@@ -881,7 +919,7 @@ folder**, **Re-enter API keys…** and **Quit dictate**. Notifications appear in
 Notification Center. dictate has no Dock icon and no overlay on macOS.
 
 **FR-22.9** [Must] `[user]` API keys shall be stored in the login Keychain as
-generic passwords, service `dictate`, accounts `elevenlabs` and `anthropic`,
+generic passwords, service `dictate`, accounts `elevenlabs`, `anthropic` and `infomaniak`,
 and shall not be written to any file. They are entered in system dialogs with
 hidden input: at first start, through **Re-enter API keys…**, or with
 `dictate --auth`. FR-15.3 applies unchanged.
@@ -928,8 +966,12 @@ macOS; **System Settings → General → Login Items** starts it at login.
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
 | `Language` | enum | `Auto` | FR-10.3 |
 | `SwissSpelling` | bool | `true` | FR-11.11 |
+| `TranscriptionProvider` | enum | `ElevenLabs` (or `Infomaniak`) | FR-10.1 |
+| `TranscriptionModel` | string? | `null`: `ScribeModelId` / `whisper` | FR-10.2 |
 | `ScribeModelId` | string | `scribe_v2` | FR-10.2 |
-| `CleanupModel` | string | `claude-haiku-4-5` | FR-11.2 |
+| `CleanupProvider` | enum | `Anthropic` (or `Infomaniak`) | FR-11.1 |
+| `InfomaniakProductId` | int? | `null`: the token's first product | FR-10.7 |
+| `CleanupModel` | string? | `null`: `claude-haiku-4-5` / `google/gemma-4-31B-it` | FR-11.2 |
 | `ScribeTimeoutSeconds` | int | `15` | FR-10.6 |
 | `CleanupTimeoutSeconds` | int | `10` | FR-11.9 |
 | `Vocabulary` | string[] | project terms | FR-11.6 |

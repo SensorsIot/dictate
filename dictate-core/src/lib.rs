@@ -11,8 +11,10 @@ pub mod cleanup_prompt;
 pub mod config;
 pub mod diagnostic_log;
 mod error;
+pub mod infomaniak;
 pub mod model;
 pub mod pipeline;
+pub mod providers;
 pub mod recent;
 pub mod resample;
 pub mod scribe;
@@ -24,7 +26,11 @@ pub use cleaner::{Cleaner, HaikuCleaner, PassthroughCleaner};
 pub use config::DictateConfig;
 pub use diagnostic_log::{field, DiagnosticLog, Field, LogValue};
 pub use error::Error;
-pub use model::{LanguageMode, OverlayPosition, TargetContext, Transcript, Utterance, UtteranceStatus};
+pub use infomaniak::{InfomaniakAccount, InfomaniakCleaner, InfomaniakTranscriber};
+pub use model::{
+    CleanupProvider, Credential, LanguageMode, OverlayPosition, TargetContext, Transcript, TranscriptionProvider, Utterance,
+    UtteranceStatus,
+};
 pub use pipeline::DictationPipeline;
 pub use recent::RecentUtterances;
 pub use scribe::{ScribeTranscriber, Transcriber};

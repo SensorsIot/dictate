@@ -111,7 +111,8 @@ pub fn run(config: DictateConfig, pipeline: DictationPipeline, log: DiagnosticLo
         field("keepMicOpen", config.keep_microphone_open),
         field("input", resolve_input(config.input_device.as_deref()).1),
         field("ignoreInjected", config.ignore_injected_hotkey),
-        field("cleanup", config.cleanup_model.as_str()),
+        field("transcription", format!("{} {}", config.transcription_provider, config.effective_transcription_model())),
+        field("cleanup", format!("{} {}", config.cleanup_provider, config.effective_cleanup_model())),
     ];
 
     let hotkey_key = config.hotkey_virtual_key;

@@ -1,4 +1,4 @@
-use dictate_core::{DictateConfig, LanguageMode, OverlayPosition};
+use dictate_core::{CleanupProvider, DictateConfig, LanguageMode, OverlayPosition, TranscriptionProvider};
 
 #[test]
 fn defaults_match_the_configuration_catalogue() {
@@ -14,7 +14,10 @@ fn defaults_match_the_configuration_catalogue() {
     assert!(config.swiss_spelling);
     assert_eq!(config.input_device, None);
     assert_eq!(config.scribe_model_id, "scribe_v2");
-    assert_eq!(config.cleanup_model, "claude-haiku-4-5");
+    assert_eq!(config.transcription_provider, TranscriptionProvider::ElevenLabs);
+    assert_eq!(config.cleanup_provider, CleanupProvider::Anthropic);
+    assert_eq!(config.cleanup_model, None);
+    assert_eq!(config.infomaniak_product_id, None);
     assert_eq!(config.silence_threshold, 200);
     assert!(!config.enable_diagnostic_log);
     assert_eq!(config.overlay_position, OverlayPosition::BottomRight);

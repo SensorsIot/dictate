@@ -41,7 +41,7 @@ impl HaikuCleaner {
         Ok(Self {
             http: Client::builder().timeout(timeout).build()?,
             api_key: api_key.into(),
-            model: config.cleanup_model.clone(),
+            model: config.effective_cleanup_model().to_owned(),
             system_prompt: cleanup_prompt::build_system(config),
         })
     }
@@ -110,7 +110,7 @@ impl Cleaner for HaikuCleaner {
     }
 }
 
-/// Cleanup that does nothing. Used when no Anthropic key is configured, so the
+/// Cleanup that does nothing. Used when the cleanup provider has no key, so the
 /// tool still dictates — just verbatim (FR-11.10).
 pub struct PassthroughCleaner;
 

@@ -1,4 +1,6 @@
-//! Collects the two API keys and stores them in the Keychain.
+//! Collects the API keys the configured providers need and stores them in the
+//! Keychain: the transcription key, and the cleanup key if that provider is a
+//! different one.
 //!
 //! The dialogs are AppleScript's, shown by `osascript`: a native prompt with a
 //! hidden-answer field and no window code of our own. The key comes back on
@@ -6,39 +8,57 @@
 
 use std::process::Command;
 
-use crate::credentials;
+use dictate_core::DictateConfig;
 
-/// Asks for both keys. Returns true if the ElevenLabs key was stored. Blocks
+use crate::credentials;
+use crate::paths;
+
+/// Asks for the keys. Returns true if the transcription key was stored. Blocks
 /// until the user answers, so it never runs on the main thread once the menu
 /// bar item exists.
 pub fn prompt() -> bool {
-    let Some(elevenlabs) = ask(
-        "ElevenLabs API key (required).\n\nStored in your login Keychain, never in a file.",
+    // A config file that does not parse is reported at startup; here it only
+    // means asking for the default providers' keys.
+    let config = DictateConfig::load(&paths::config_file()).unwrap_or_default();
+    let transcription = config.transcription_provider.credential();
+    let cleanup = config.cleanup_provider.credential();
+
+    let Some(key) = ask(
+        &format!("{transcription} API key (required).\n\nStored in your login Keychain, never in a file."),
         true,
     ) else {
         return false;
     };
-    if elevenlabs.is_empty() {
-        alert("dictate needs an ElevenLabs key to transcribe. Nothing was stored.");
+    if key.is_empty() {
+        alert(&format!("dictate needs a {transcription} key to transcribe. Nothing was stored."));
         return false;
     }
 
-    let anthropic = ask(
-        "Anthropic API key (optional).\n\nWithout it, dictate types the transcript verbatim, without cleanup. \
-         Leave empty to skip.",
-        false,
-    )
-    .unwrap_or_default();
+    // Asked only when cleanup uses a different provider's key.
+    let cleanup_key = (cleanup != transcription).then(|| {
+        ask(
+            &format!(
+                "{cleanup} API key (optional).\n\nWithout it, dictate types the transcript verbatim, without cleanup. \
+                 Leave empty to skip."
+            ),
+            false,
+        )
+        .unwrap_or_default()
+    });
 
-    if let Err(error) = credentials::write(credentials::ELEVENLABS, &elevenlabs) {
+    if let Err(error) = credentials::write(credentials::account(transcription), &key) {
         alert(&error);
         return false;
     }
 
-    if anthropic.is_empty() {
-        credentials::delete(credentials::ANTHROPIC);
-    } else if let Err(error) = credentials::write(credentials::ANTHROPIC, &anthropic) {
-        alert(&error);
+    match cleanup_key {
+        None => {}
+        Some(value) if value.is_empty() => credentials::delete(credentials::account(cleanup)),
+        Some(value) => {
+            if let Err(error) = credentials::write(credentials::account(cleanup), &value) {
+                alert(&error);
+            }
+        }
     }
 
     true
