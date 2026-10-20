@@ -45,8 +45,10 @@ Two habits follow, and they are not optional here:
 2. **Push compile-checkable changes in batches.** One push that fixes six
    plausible errors beats six pushes fixing one each.
 
-CI uploads the release build of every push to `main` as the `dictate-exe`
-artifact, so a change can be tried on the desktop without a release.
+CI uploads the release build of every push to `main` as the `dictate-exe` and
+`dictate-macos` artifacts, so a change can be tried on the desktop without a
+release. A push that touches only `docs/`, Markdown or the test plan starts no
+run, and a newer push cancels the run still going for the previous one.
 
 ## 2. Project layout
 
@@ -91,8 +93,8 @@ external dependency and it gets a trait in the core first.
 
 | Tier | Where | When | What it can reach |
 |---|---|---|---|
-| `host` | `ubuntu-latest`, and `windows-latest` again | Every push | All of `dictate-core` |
-| `ci` | `windows-latest`, `macos-latest` | Every push; release on tag | Compilation of both heads, the exe and the signed app |
+| `host` | `ubuntu-latest`, and `windows-latest` again | Every push that changes code | All of `dictate-core` |
+| `ci` | `windows-latest`, `macos-latest` | Every push that changes code; release on tag | Compilation of both heads, the exe and the signed app |
 | `desktop` | The user's Windows 11 machine | By hand | Hotkey, microphone, `SendInput`, focus, tray |
 | `desktop-mac` | The user's Mac | By hand | Event tap, CoreAudio, synthetic typing, focus, menu bar, permissions |
 

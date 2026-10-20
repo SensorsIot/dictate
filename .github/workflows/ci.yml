@@ -4,11 +4,19 @@ name: CI
 # development machine (Harness §1), so a red build here is the first notification
 # that anything is wrong.
 
+# Documentation and the test plan do not reach the build. A Mac runner is
+# scarce, so a newer push replaces the run still going for the previous one.
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**.md', 'testing/test-plan.yaml']
   pull_request:
+    paths-ignore: ['docs/**', '**.md', 'testing/test-plan.yaml']
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
