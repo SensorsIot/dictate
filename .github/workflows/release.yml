@@ -111,7 +111,8 @@ jobs:
 
       - name: Stamp the version
         run: |
-          sed -i '' "1,/^version = .*/s//version = \"${{ steps.version.outputs.version }}\"/" Cargo.toml
+          # BSD sed: no empty regex after a range address, so the pattern is repeated.
+          sed -i '' "1,/^version = /s/^version = .*/version = \"${{ steps.version.outputs.version }}\"/" Cargo.toml
           grep -m1 '^version' Cargo.toml
 
       - name: Test
