@@ -65,6 +65,13 @@ config.json means the same key on each; on a Mac it lives in
 hotkeys; `SuppressHotkey` has no effect there, because the Mac hotkey is never
 swallowed.
 
+On a Windows keyboard without a right Windows key, use **Right Ctrl**
+(`"HotkeyVirtualKey": 163`). On a Mac, Control on its own does nothing, and
+Control+scroll zooms only if you have switched on zoom in the Accessibility settings. Avoid
+Right Alt: it is the right Option key, which types `@`, `#` and `|` on a Swiss
+layout. Caps Lock does not work as a Mac hotkey: macOS reports only when it
+toggles, not how long it is held.
+
 ## 3. Everyday use
 
 Hold **Right Windows**, speak, release.
