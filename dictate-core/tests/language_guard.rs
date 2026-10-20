@@ -27,7 +27,7 @@ impl Transcriber for Fake {
     }
 }
 
-fn asked(guard: &GermanOrEnglish, fake: &Fake) -> (Transcript, Vec<LanguageMode>) {
+fn run(guard: &GermanOrEnglish, fake: &Fake) -> (Transcript, Vec<LanguageMode>) {
     let transcript = guard.transcribe(b"", LanguageMode::Auto).unwrap();
     let mut asked = fake.asked.lock().unwrap().clone();
     asked.sort_by_key(|l| l.name());
@@ -41,7 +41,7 @@ fn german_or_english_detected_is_kept_after_one_request() {
     for detected in ["deu", "german", "en", "ENGLISH"] {
         let fake = std::sync::Arc::new(Fake::new(detected, -0.1, -0.1));
         let guard = GermanOrEnglish::new(Box::new(ArcFake(fake.clone())));
-        let (transcript, asked) = asked(&guard, &fake);
+        let (transcript, asked) = run(&guard, &fake);
         assert_eq!(asked, [LanguageMode::Auto], "{detected}: no second request");
         assert!(matches!(transcript.language_code.as_deref(), Some("de" | "en")), "normalised: {detected}");
     }
@@ -52,14 +52,14 @@ fn a_third_language_is_redone_as_german_and_english_and_the_surer_wins() {
     // FR-10.8. Must not: Dutch (or anything else) delivered.
     let fake = std::sync::Arc::new(Fake::new("nl", -0.5, -0.1));
     let guard = GermanOrEnglish::new(Box::new(ArcFake(fake.clone())));
-    let (transcript, asked) = asked(&guard, &fake);
+    let (transcript, asked) = run(&guard, &fake);
     assert_eq!(asked, [LanguageMode::Auto, LanguageMode::English, LanguageMode::German]);
     assert_eq!(transcript.text, "hallo (en)");
     assert_eq!(transcript.language_code.as_deref(), Some("en"));
 
     let fake = std::sync::Arc::new(Fake::new("gsw", -0.05, -0.9));
     let guard = GermanOrEnglish::new(Box::new(ArcFake(fake.clone())));
-    let (transcript, _) = asked(&guard, &fake);
+    let (transcript, _) = run(&guard, &fake);
     assert_eq!(transcript.text, "hallo (de)", "Swiss German becomes Standard German");
 }
 
