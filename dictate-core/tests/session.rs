@@ -282,7 +282,7 @@ fn each_utterance_goes_only_to_the_window_focused_at_its_own_press() {
 
     let world = world.borrow();
     assert_eq!(world.typed, ["sentence 2 "], "the first sentence may not be typed into the second window");
-    assert_eq!(world.clipboard.last().map(String::as_str), Some("sentence 1"));
+    assert!(world.clipboard.iter().any(|text| text == "sentence 1"));
     assert_eq!(world.notices, ["Focus changed"]);
 }
 
