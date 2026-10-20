@@ -262,13 +262,15 @@ fn handle(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LR
                 let config = &app.session.config;
                 let replay = reason == StopReason::Released && held.is_some_and(|held| config.replays_tap(held));
                 let virtual_key = config.hotkey_virtual_key as u16;
-                app.session.end(reason);
+                // Before `end`, which stops the capture device and can take half
+                // a second: the user expects the tap to act at release.
                 if replay {
                     // Stamped with the injection signature, so the hook lets it
                     // through instead of starting another session.
                     let sent = injector::tap_key(virtual_key);
                     app.session.log.event("hotkey.passedThrough", &[field("sent", sent)]);
                 }
+                app.session.end(reason);
             });
         }
         WM_HOTKEY_REJECTED => {
