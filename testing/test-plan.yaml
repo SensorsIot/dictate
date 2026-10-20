@@ -290,7 +290,7 @@ tests:
     verifies: [FR-10.3, FR-10.7]
     must_not: a failed batch delivered as an empty transcript
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39453798284, 2026-10-20
 
   - id: H-22
     name: Infomaniak cleanup request is deterministic, unstreamed and unreasoned; only content is typed
@@ -301,7 +301,7 @@ tests:
     verifies: [FR-11.1, FR-11.8]
     must_not: the reasoning field returned as text to type
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39453798284, 2026-10-20
 
   - id: H-23
     name: Providers parse, unset models follow the provider, each provider reads its own key
@@ -312,7 +312,7 @@ tests:
     verifies: [FR-10.1, FR-10.2, FR-11.2, FR-11.10, FR-11.13]
     must_not: a Claude model name sent to Infomaniak, or the ElevenLabs key demanded when Infomaniak transcribes
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39453798284, 2026-10-20
 
   - id: H-24
     name: Only a short, suppressed, released press is handed back to the system
@@ -323,7 +323,7 @@ tests:
     verifies: [FR-8.9]
     must_not: a replay of a press that was not suppressed
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 39453798284, 2026-10-20, Caps Lock tap confirmed on the desktop
 
   # ---- ci tier ---------------------------------------------------------------
 
