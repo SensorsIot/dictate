@@ -6,6 +6,7 @@
 //! `finish` once the background job it was handed has run. Everything the FSD
 //! says about a session in between happens here, the same on every platform.
 
+use std::collections::{HashMap, VecDeque};
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -101,7 +102,9 @@ pub trait Platform {
 }
 
 /// What the session remembers about an utterance while the pipeline runs.
-struct Pending {
+struct Pending<T> {
+    id: u64,
+    pinned: Option<T>,
     held: Duration,
     pcm_bytes: usize,
     target: TargetContext,
@@ -114,12 +117,17 @@ pub struct Session<P: Platform> {
     pub recent: RecentUtterances,
     pipeline: Arc<DictationPipeline>,
     state: SessionState,
+    recording: bool,
     pinned: Option<P::Target>,
     pressed_at: Instant,
-    pending: Option<Pending>,
+    /// Utterances handed to the pipeline, in press order (FR-5.1).
+    queue: VecDeque<Pending<P::Target>>,
+    /// Pipeline results that arrived before an earlier utterance was delivered.
+    done: HashMap<u64, Utterance>,
+    next_id: u64,
     utterance_count: u64,
-    results_tx: Sender<Utterance>,
-    results: Receiver<Utterance>,
+    results_tx: Sender<(u64, Utterance)>,
+    results: Receiver<(u64, Utterance)>,
 }
 
 impl<P: Platform> Session<P> {
@@ -132,9 +140,12 @@ impl<P: Platform> Session<P> {
             recent: RecentUtterances::new(RECENT_CAPACITY),
             pipeline: Arc::new(pipeline),
             state: SessionState::Idle,
+            recording: false,
             pinned: None,
             pressed_at: Instant::now(),
-            pending: None,
+            queue: VecDeque::new(),
+            done: HashMap::new(),
+            next_id: 0,
             utterance_count: 0,
             results_tx,
             results,
@@ -149,18 +160,29 @@ impl<P: Platform> Session<P> {
         self.utterance_count
     }
 
-    fn set_state(&mut self, state: SessionState) {
-        self.state = state;
-        self.platform.show_state(state);
+    /// Recording wins over transcribing: the user needs to see that the
+    /// microphone is live, not that an earlier sentence is still on its way.
+    fn show_state(&mut self) {
+        let state = if self.recording {
+            SessionState::Recording
+        } else if !self.queue.is_empty() {
+            SessionState::Transcribing
+        } else {
+            SessionState::Idle
+        };
+        if state != self.state {
+            self.state = state;
+            self.platform.show_state(state);
+        }
     }
 
     /// A press. `origin` carries what the head knows about where the press came
     /// from (injected, lower integrity), logged with `recording.start`.
     pub fn begin(&mut self, pressed_at: Instant, origin: Vec<Field>) {
-        // FR-5.1: one session at a time. A press while transcribing is ignored
-        // rather than queued — two utterances in flight is how audio from one
-        // ends up delivered into the target of the other.
-        if self.state != SessionState::Idle {
+        // FR-5.1: one recording at a time; earlier utterances may still be in
+        // the pipeline. Each keeps its own pinned target, so none can be
+        // delivered into the target of another.
+        if self.recording {
             return;
         }
 
@@ -177,7 +199,8 @@ impl<P: Platform> Session<P> {
         self.platform.start_capture();
 
         let latency = self.pressed_at.elapsed();
-        self.set_state(SessionState::Recording);
+        self.recording = true;
+        self.show_state();
 
         let mut fields = vec![field("pressToStart", latency)];
         fields.extend(origin);
@@ -190,18 +213,20 @@ impl<P: Platform> Session<P> {
         let error = self.platform.take_capture_error().unwrap_or_else(|| "Unknown error.".into());
         self.log.event("mic.openFailed", &[field("error", error.as_str())]);
 
-        if self.state == SessionState::Recording {
-            self.set_state(SessionState::Idle);
+        if self.recording {
+            self.recording = false;
+            self.deliver_ready();
         }
 
         self.platform.notify("Could not start recording", &error);
     }
 
     pub fn end(&mut self, reason: StopReason) {
-        if self.state != SessionState::Recording {
+        if !self.recording {
             return;
         }
 
+        self.recording = false;
         let held = self.pressed_at.elapsed();
         let pcm = self.platform.stop_capture();
 
@@ -213,8 +238,8 @@ impl<P: Platform> Session<P> {
         // FR-5.2: an accidental tap costs nothing and says nothing — to the
         // user. It is still logged, or a session that ends here is invisible.
         if held.as_millis() < self.config.minimum_hold_ms.max(0) as u128 {
-            self.set_state(SessionState::Idle);
             self.log.event("recording.discarded", &[field("reason", "tap"), field("held", held)]);
+            self.deliver_ready();
             return;
         }
 
@@ -228,14 +253,15 @@ impl<P: Platform> Session<P> {
             );
         }
 
-        self.set_state(SessionState::Transcribing);
-
-        let target = match self.pinned {
+        let pinned = self.pinned.take();
+        let target = match pinned {
             Some(pinned) => self.platform.describe(pinned, &self.config.extra_console_processes),
             None => TargetContext::unknown(),
         };
 
-        self.pending = Some(Pending { held, pcm_bytes: pcm.len(), target: target.clone() });
+        let id = self.next_id;
+        self.next_id += 1;
+        self.queue.push_back(Pending { id, pinned, held, pcm_bytes: pcm.len(), target: target.clone() });
 
         let pipeline = Arc::clone(&self.pipeline);
         let results = self.results_tx.clone();
@@ -245,25 +271,40 @@ impl<P: Platform> Session<P> {
             // its contract broke. It costs one utterance, never the session.
             let utterance = panic::catch_unwind(AssertUnwindSafe(|| pipeline.process(&pcm, &target)))
                 .unwrap_or_else(|_| Utterance::fail("The pipeline hit an internal error."));
-            let _ = results.send(utterance);
+            let _ = results.send((id, utterance));
         }));
+
+        // An earlier utterance may have finished while this one was recorded.
+        self.deliver_ready();
     }
 
-    /// The background job from `end` has run.
+    /// A background job from `end` has run.
     pub fn finish(&mut self) {
-        let Ok(utterance) = self.results.try_recv() else { return };
-        let Some(pending) = self.pending.take() else { return };
+        while let Ok((id, utterance)) = self.results.try_recv() {
+            self.done.insert(id, utterance);
+        }
+        self.deliver_ready();
+    }
 
-        self.set_state(SessionState::Idle);
-        self.utterance_count += 1;
-        self.log_outcome(&utterance, &pending);
-        self.deliver(&utterance);
+    /// FR-5.1: delivers finished utterances in press order, and none while the
+    /// hotkey is held — a typed keystroke would combine with a modifier hotkey.
+    fn deliver_ready(&mut self) {
+        while !self.recording {
+            let Some(id) = self.queue.front().map(|pending| pending.id) else { break };
+            let Some(utterance) = self.done.remove(&id) else { break };
+            let Some(pending) = self.queue.pop_front() else { break };
+
+            self.utterance_count += 1;
+            self.log_outcome(&utterance, &pending);
+            self.deliver(&utterance, pending.pinned);
+        }
+        self.show_state();
     }
 
     /// Records the shape of an utterance and the process counters alongside it.
     /// Length rather than text: enough to correlate with a delivery problem,
     /// and FR-17.1 stays intact.
-    fn log_outcome(&self, utterance: &Utterance, pending: &Pending) {
+    fn log_outcome(&self, utterance: &Utterance, pending: &Pending<P::Target>) {
         if !self.log.is_enabled() {
             return;
         }
@@ -290,7 +331,7 @@ impl<P: Platform> Session<P> {
         );
     }
 
-    fn deliver(&mut self, utterance: &Utterance) {
+    fn deliver(&mut self, utterance: &Utterance, pinned: Option<P::Target>) {
         if utterance.status == UtteranceStatus::Failed {
             self.platform.notify("Dictation failed", utterance.error.as_deref().unwrap_or("Unknown error."));
             return;
@@ -320,7 +361,7 @@ impl<P: Platform> Session<P> {
         }
 
         // FR-6.2: the target that had focus at press time, or nothing.
-        if Some(self.platform.focused()) != self.pinned {
+        if Some(self.platform.focused()) != pinned {
             self.log.event("delivery", &[field("method", "clipboard"), field("reason", "focus-changed")]);
             let detail = format!("The text is on the clipboard — press {}.", self.platform.paste_hint());
             self.to_clipboard(&utterance.text, "Focus changed", &detail);

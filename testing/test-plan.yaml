@@ -226,7 +226,7 @@ tests:
     scenario: standard
     tier: host
     file: dictate-core/tests/session.rs
-    verifies: [FR-5.1, FR-5.2, FR-6.1, FR-6.2, FR-7.1, FR-17.2]
+    verifies: [FR-5.2, FR-6.1, FR-6.2, FR-7.1, FR-17.2]
     must_not: text typed into a window that did not have focus at key-press
     status: implemented
     last_result: pass        # run 39259367720, 2026-10-19
@@ -325,6 +325,17 @@ tests:
     status: implemented
     last_result: pass        # run 39453798284, 2026-10-20, Caps Lock tap confirmed on the desktop
 
+  - id: H-25
+    name: A press while earlier utterances are processed records at once; delivery in press order, each to its own target, never while recording
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: dictate-core/tests/session.rs
+    verifies: [FR-5.1]
+    must_not: a press ignored while processing; a later utterance typed before an earlier one; one utterance's text in another's target; a keystroke while the hotkey is held
+    status: designed
+    last_result: never_run
+
   # ---- ci tier ---------------------------------------------------------------
 
   - id: C-01
@@ -421,6 +432,22 @@ tests:
     must_not: recording.stop reason=Reconciled while the key is held
     status: implemented
     last_result: partial     # build 3755883, 2026-10-20: Right Ctrl held 4.5 s, reason=Released, typed; Right Command and Right Option not run
+
+  - id: DM-05
+    name: Dictating the next sentence while the previous one is processed, on the Mac
+    kind: e2e
+    scenario: standard
+    tier: desktop-mac
+    verifies: [FR-5.1]
+    procedure: >
+      Set EnableDiagnosticLog true. In TextEdit, dictate a long sentence, and
+      press the hotkey again right after releasing it to dictate a short one.
+    expect: >
+      Both sentences typed, the long one first; the log shows the second
+      recording.start before the first utterance line.
+    must_not: the second press ignored; the sentences swapped; a character typed while the hotkey is held
+    status: designed
+    last_result: never_run
 
   # ---- desktop tier ----------------------------------------------------------
 

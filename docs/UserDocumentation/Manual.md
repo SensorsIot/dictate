@@ -84,6 +84,10 @@ Hold **Right Windows**, speak, release.
 | Overlay clears, text appears | Done |
 | Notification | Something failed — the notification says what |
 
+You don't have to wait for the text before the next sentence: press again
+while it is still *transcribing* and it records at once. The sentences are
+typed in the order you spoke them, and nothing is typed while you are holding the key.
+
 Two rules worth knowing:
 
 - **Don't switch windows while it is thinking.** If the focused window changes

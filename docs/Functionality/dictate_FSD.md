@@ -194,32 +194,61 @@ exist.
 
 ### 5.1 State model (normative)
 
-The transition table is normative; any diagram is generated from it. Every
+The transition tables are normative; any diagram is generated from them. Every
 (state × event) pair below is handled or explicitly ignored.
+
+Recording and processing are independent. The **recorder** captures one
+utterance at a time; each released utterance joins the **queue**, which runs
+the pipeline for every entry at once and delivers them strictly in press order.
+
+**Recorder**
 
 | From | Event | Guard | To | Action |
 |---|---|---|---|---|
-| `Idle` | hotkey down | input device present | `Recording` | Pin target window; start capture; show overlay |
+| `Idle` | hotkey down | input device present | `Recording` | Pin target window; start capture |
 | `Idle` | hotkey down | no input device | `Idle` | Error toast |
-| `Recording` | hotkey up | held ≥ `MinimumHoldMs` | `Transcribing` | Stop capture; overlay → *transcribing* |
-| `Recording` | hotkey up | held < `MinimumHoldMs` | `Idle` | Discard audio; clear overlay; no sound |
-| `Recording` | max duration reached | — | `Transcribing` | Stop capture; toast; proceed with what was captured |
+| `Recording` | hotkey up | held ≥ `MinimumHoldMs` | `Idle` | Stop capture; enqueue the utterance with its pinned target |
+| `Recording` | hotkey up | held < `MinimumHoldMs` | `Idle` | Discard audio; no sound |
+| `Recording` | max duration reached | — | `Idle` | Stop capture; toast; enqueue what was captured |
 | `Recording` | hotkey down | — | `Recording` | Ignored (auto-repeat) |
 | `Recording` | hotkey observed physically up, no key-up received | — | as for *hotkey up* | Reconciled release (FR-8.7) |
-| `Transcribing` | pipeline returns text | — | `Delivering` | — |
-| `Transcribing` | pipeline returns failure | — | `Idle` | Error toast; clear overlay |
-| `Transcribing` | hotkey down | — | `Transcribing` | Ignored — a new utterance may not start while one is in flight |
-| `Delivering` | focus unchanged | — | `Idle` | Type text; clear overlay |
-| `Delivering` | focus changed | — | `Idle` | Copy to clipboard; toast; clear overlay |
-| `Delivering` | injection throws | — | `Idle` | Copy to clipboard; toast with the error |
 
-**FR-5.1** [Must] `[derived]` The application shall hold exactly one dictation
-session at a time; a hotkey press received in any state other than `Idle` shall
-be ignored.
+**Queue entry** (one per enqueued utterance)
 
-> **VC** — *Pre:* session in `Transcribing`. *Stimulus:* hotkey down. *Expect:* no
-> new capture starts; state unchanged. *Must not:* two concurrent captures; audio
-> from two utterances concatenated. *Tier:* desktop. *Evidence:* screen recording.
+| From | Event | Guard | To | Action |
+|---|---|---|---|---|
+| `Processing` | pipeline returns | — | `Done` | — |
+| `Done` | — | an earlier entry is not delivered, or the recorder is `Recording` | `Done` | Wait |
+| `Done` | — | failure | removed | Error toast |
+| `Done` | — | text, focus on its pinned target | removed | Type text |
+| `Done` | — | text, focus elsewhere | removed | Copy to clipboard; toast |
+| `Done` | — | text, injection throws | removed | Copy to clipboard; toast with the error |
+
+The overlay and tray show *recording* while the recorder is `Recording`,
+*transcribing* while it is `Idle` and the queue is not empty, and nothing
+otherwise.
+
+**FR-5.1** [Must] `[user]` A hotkey press shall start a new recording whenever
+none is in progress, including while earlier utterances are still being
+transcribed or cleaned up. Each utterance shall be delivered to the target
+pinned at its own press, in the order the presses were made, and never while a
+recording is in progress.
+
+> The user speaks the next sentence as soon as the last one is out of their
+> mouth; a press ignored for the two seconds the pipeline takes is a sentence
+> lost. Order matters because the pipelines run side by side and a short
+> sentence can finish before a long one. Delivery waits for the key to come up
+> because typed keystrokes would combine with a held modifier hotkey, and text
+> appearing under the caret while the user is mid-sentence is a distraction.
+>
+> **VC** — *Pre:* utterance A `Processing`. *Stimulus:* hotkey down, speak,
+> hotkey up. *Expect:* a second capture starts at the press; A is typed before
+> B. *Must not:* the press ignored; B typed before A; A's text in B's target;
+> audio from two utterances concatenated. *Tier:* host, desktop.
+>
+> **VC** — *Pre:* utterance A `Done`, waiting. *Stimulus:* recording B in
+> progress. *Expect:* nothing typed until B's hotkey up; A is then typed.
+> *Must not:* a keystroke delivered while the hotkey is held. *Tier:* host.
 
 **FR-5.4** [Must] `[derived]` At most one instance shall run per user session.
 A second launch shall say that dictate is already running and exit without
@@ -233,7 +262,7 @@ installing a hook.
 (default 300 ms) shall be discarded without transcription and without sound.
 
 > **VC** — *Pre:* `Idle`. *Stimulus:* tap the hotkey for < 300 ms. *Expect:* no
-> network request; no overlay change that outlives the tap; state returns to `Idle`. *Must not:* an empty
+> network request; no overlay change that outlives the tap; the recorder returns to `Idle`. *Must not:* an empty
 > utterance reaching Scribe (it is billable). *Tier:* desktop.
 
 **FR-5.3** [Must] `[user]` Capture shall stop automatically after
