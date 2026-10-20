@@ -66,7 +66,8 @@ hotkeys; `SuppressHotkey` has no effect there, because the Mac hotkey is never
 swallowed.
 
 On a Windows keyboard without a right Windows key, use **Right Ctrl**
-(`"HotkeyVirtualKey": 163`). On a Mac, Control on its own does nothing, and
+(`"HotkeyVirtualKey": 163`), or Pause, which the Mac reads as F15
+(`"HotkeyVirtualKey": 126`). On a Mac, Control on its own does nothing, and
 Control+scroll zooms only if you have switched on zoom in the Accessibility settings. Avoid
 Right Alt: it is the right Option key, which types `@`, `#` and `|` on a Swiss
 layout. Caps Lock does not work as a Mac hotkey: macOS reports only when it

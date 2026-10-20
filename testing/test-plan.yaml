@@ -419,8 +419,8 @@ tests:
       For each key one session, recording.stop reason=Released held≈3000ms,
       and the sentence typed.
     must_not: recording.stop reason=Reconciled while the key is held
-    status: designed
-    last_result: never_run
+    status: implemented
+    last_result: partial     # build 3755883, 2026-10-20: Right Ctrl held 4.5 s, reason=Released, typed; Right Command and Right Option not run
 
   # ---- desktop tier ----------------------------------------------------------
 

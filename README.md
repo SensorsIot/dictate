@@ -145,6 +145,27 @@ Laptop, for keyboards without one (Windows only):
 }
 ```
 
+On a Mac the key codes are the Windows ones, so one `config.json` means the
+same physical key on both systems. The Mac never swallows the hotkey, and
+Caps Lock does not work there: macOS reports when it toggles, not how long it
+is held.
+
+| Keyboard on the Mac | Key | `HotkeyVirtualKey` |
+|---|---|---|
+| **Mac keyboard** | Right Command (the default) | `92` |
+| **Windows keyboard with a right Windows key** | Right Windows, which the Mac reads as Right Command (the default) | `92` |
+| **Windows keyboard without one** | Right Ctrl | `163` |
+| | or Pause, which the Mac reads as F15 | `126` |
+
+```json
+{
+  "HotkeyVirtualKey": 163
+}
+```
+
+Not AltGr: on a Mac it is the right Option key, which types `@`, `#` and `|`
+on a Swiss layout. The Menu key is not supported as a hotkey.
+
 The [manual](docs/UserDocumentation/Manual.md#choosing-the-hotkey) lists the
 other keys and why most of them are a bad idea.
 
