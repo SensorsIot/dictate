@@ -63,19 +63,7 @@ impl ScribeTranscriber {
 
         let language_code = root.get("language_code").and_then(Value::as_str).map(str::to_owned);
 
-        // Scribe scores each word; their mean is what FR-10.8 compares when
-        // the same audio is run as German and as English.
-        let logprobs: Vec<f64> = root
-            .get("words")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter(|word| word.get("type").and_then(Value::as_str) == Some("word"))
-            .filter_map(|word| word.get("logprob").and_then(Value::as_f64))
-            .collect();
-        let confidence = (!logprobs.is_empty()).then(|| logprobs.iter().sum::<f64>() / logprobs.len() as f64);
-
-        Ok(Transcript { text, language_code, confidence })
+        Ok(Transcript { text, language_code })
     }
 }
 

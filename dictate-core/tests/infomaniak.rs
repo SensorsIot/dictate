@@ -40,13 +40,12 @@ fn a_result_poll_distinguishes_running_done_and_failed() {
     assert_eq!(InfomaniakTranscriber::parse_result(pending).unwrap(), BatchState::Running);
 
     // As measured: no envelope, and `data` is the verbose_json document as a string.
-    let done = r#"{"status":"success","url":"x","data":"{\"language\": \"german\", \"text\": \" Das ist ein kurzer Test.\", \"segments\": [{\"avg_logprob\": -0.2}, {\"avg_logprob\": -0.4}]}"}"#;
+    let done = r#"{"status":"success","url":"x","data":"{\"language\": \"german\", \"text\": \" Das ist ein kurzer Test.\", \"segments\": []}"}"#;
     let BatchState::Done(transcript) = InfomaniakTranscriber::parse_result(done).unwrap() else {
         panic!("expected a finished batch");
     };
     assert_eq!(transcript.text, "Das ist ein kurzer Test.");
-    assert_eq!(transcript.language_code.as_deref(), Some("german"));
-    assert!((transcript.confidence.unwrap() + 0.3).abs() < 1e-9, "mean of the segment log-probabilities");
+    assert_eq!(transcript.language_code.as_deref(), Some("german"), "the detected language reaches the log");
 
     // A failed batch must surface as an error, never as an empty transcript.
     let failed = r#"{"result":"success","data":{"status":"failed","data":null}}"#;

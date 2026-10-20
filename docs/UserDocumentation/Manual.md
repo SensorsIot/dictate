@@ -98,7 +98,7 @@ The settings you are most likely to want:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `Language` | `Auto` | `Auto` switches between German and English by itself — no other language is ever written; anything else detected (Swiss German, say) is redone as German and as English and the better one kept. `German` or `English` pins the language when auto-detection keeps guessing wrong on short phrases |
+| `Language` | `Auto` | `German` or `English` pins the language when auto-detection keeps guessing wrong on short phrases. `Auto` lets the provider choose; the diagnostic log shows what it detected (`lang=`) |
 | `SwissSpelling` | `true` | Swiss Standard German spelling: `ss`, never `ß`. Applies even when cleanup fails |
 | `Vocabulary` | project terms | Words to spell exactly this way — project names, call signs, jargon |
 | `HotkeyVirtualKey` | `92` (Right Windows) | Virtual-key code to hold — see the table below for the ones worth using |

@@ -77,7 +77,7 @@ impl InfomaniakAccount {
 // ---- Transcription ----------------------------------------------------------
 
 /// What a result poll found.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BatchState {
     Running,
     Done(Transcript),
@@ -106,8 +106,8 @@ impl InfomaniakTranscriber {
     /// A pinned language is sent: despite the API reference saying a language
     /// "will translate the output", German audio sent with `en` came back in
     /// German. The vocabulary rides as Whisper's prompt, which biases spelling.
-    /// `verbose_json` because only it reports the detected language and the
-    /// segment log-probabilities FR-10.8 needs.
+    /// `verbose_json` because only it reports the detected language, which the
+    /// diagnostic log records so a misdetection can be seen.
     pub fn form_fields(model: &str, language: LanguageMode, vocabulary: &[String]) -> Vec<(&'static str, String)> {
         let mut fields = vec![("model", model.to_owned()), ("response_format", "verbose_json".to_owned())];
         if let Some(code) = language.to_language_code() {
@@ -144,15 +144,7 @@ impl InfomaniakTranscriber {
                 };
                 let text = document.get("text").and_then(Value::as_str).unwrap_or_default().trim();
                 let language = document.get("language").and_then(Value::as_str);
-                let logprobs: Vec<f64> = document
-                    .get("segments")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|segment| segment.get("avg_logprob").and_then(Value::as_f64))
-                    .collect();
-                let confidence = (!logprobs.is_empty()).then(|| logprobs.iter().sum::<f64>() / logprobs.len() as f64);
-                Ok(BatchState::Done(Transcript::new(text, language).with_confidence(confidence)))
+                Ok(BatchState::Done(Transcript::new(text, language)))
             }
             _ => Err(Error::new(format!("Infomaniak transcription failed: {}", truncate(json, 500)))),
         }
