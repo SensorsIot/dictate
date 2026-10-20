@@ -17,7 +17,7 @@ from a stated requirement · `[assumed]` inferred, **not yet confirmed** ·
 
 ### 1.1 Purpose
 
-dictate turns speech into typed text on a Windows PC. The user holds a key,
+dictate turns speech into typed text on a Windows PC or a Mac. The user holds a key,
 speaks, and releases; a cleaned-up version of what they said is typed into
 whichever window had focus when they started.
 
@@ -27,7 +27,7 @@ punctuation, technical terms mangled — is not something anyone wants to send.
 
 ### 1.2 Users and context
 
-One user, on one Windows 11 machine, dictating into a mix of terminals, editors,
+One user, on a Windows 11 machine or a Mac, dictating into a mix of terminals, editors,
 browsers and chat clients. Speech is German, English, or both in the same
 sentence. The vocabulary includes project names and radio call signs that no
 general speech model spells correctly.
@@ -66,9 +66,9 @@ language, project split, build strategy, audio stack — is in
 | German + English, auto with a pin | English only · full auto with no override | The user's work mixes both in one sentence, and auto-detection misfires on short utterances. |
 | Hygiene + vocabulary + app context | Hygiene only · a full rewriting assistant | There are no voice commands: the model would have to separate content from instruction, and would eventually eat a wanted sentence. |
 | Nothing persisted to disk | Transcript history · an audio ring buffer | No dictated content at rest, not even transcripts for tuning (FR-17.1). FR-17.2's in-memory buffer is what keeps "nothing is lost" honest. |
-| Keys in Windows Credential Manager | Infisical CLI · a plaintext `.env` · a proxy service | DPAPI-encrypted at rest, works off the home LAN, no dependency on another machine being up. |
+| Keys in Windows Credential Manager or the macOS login Keychain | Infisical CLI · a plaintext `.env` · a proxy service | Encrypted at rest under the user's account (FR-15.1, FR-22.9), works off the home LAN, no dependency on another machine being up. |
 | Pin the target window, fall back to the clipboard | Best-effort typing into whatever has focus | Typing into whatever happens to be in front is how dictation lands a sentence in the wrong chat, or at a shell prompt. |
-| Right Windows | Right Ctrl · Right Alt · CapsLock · a mouse button | The hotkey is held for seconds, so it must mean nothing on its own. Right Ctrl is browser zoom; Right Alt is AltGr on a Swiss layout and binding it would cost `@ { } [ ] \`. |
+| Right Windows; Caps Lock with its tap kept, where there is no right Windows key | Right Ctrl · Right Alt · a mouse button | The hotkey is held for seconds, so it must mean nothing on its own. Right Ctrl is browser zoom; Right Alt is AltGr on a Swiss layout and binding it would cost `@ { } [ ] \`. Caps Lock is on the left of every laptop keyboard and keeps its own function on a quick tap (FR-8.9). |
 
 Further product-level constraints are recorded at the requirement they shape:
 FR-14.3 (no audio cues at all), FR-14.2 (a fixed
@@ -143,7 +143,8 @@ behave the same.
 |---|---|---|---|
 | **host** | `ubuntu-latest` in CI, every push | Everything in `dictate-core`: prompt construction, WAV framing, response parsing, sanitisation, pipeline degradation, configuration | Seconds |
 | **desktop** | The user's Windows 11 machine, manually | Hotkey capture, microphone, `SendInput`, focus pinning, tray and overlay, Credential Manager | Minutes, human in the loop |
-| **ci** | `windows-latest` in CI, every push; release on tag | The Windows head compiles; a tag publishes the exe | Minutes |
+| **desktop-mac** | The user's Mac, manually | Event tap, CoreAudio capture, synthetic typing, focus pinning, menu bar, Keychain, permission prompts | Minutes, human in the loop |
+| **ci** | `windows-latest` and `macos-latest` in CI, every push; release on tag | Both heads compile; a tag publishes the exe and the signed, notarized app | Minutes |
 
 Nothing in the **desktop** tier can be automated in this project's
 infrastructure: it needs a real keyboard hook, a real microphone and a real
@@ -175,13 +176,13 @@ exist.
 | R-05 | An API key is readable on the machine | Account compromise | FR-15.1: DPAPI via Credential Manager, never a file |
 | R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.5 boundary. Per-app chunking (FR-12.3) is the escape hatch |
 | R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted; see the Harness §0. Host tests keep the blast radius small |
-| R-08 | Scribe or Anthropic changes a model identifier | Every utterance fails | FR-10.2 and FR-11.2 make both configurable; FR-7.4 surfaces the API's own error text |
+| R-08 | A provider changes a model identifier | Every utterance fails | FR-10.2 and FR-11.2 make every model configurable; FR-7.4 surfaces the API's own error text |
 
 ### 4.1 Explicitly out of scope
 
 - Voice commands ("delete that", "make it formal") — see §1.4.
 - Streaming transcription — see the Harness §0.
-- Any platform other than Windows 11 x64.
+- Any platform other than Windows 11 x64 and macOS.
 - Multi-user or shared-machine operation.
 - Persisting transcripts, audio, or usage history — see §1.4.
 

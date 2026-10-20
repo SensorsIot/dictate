@@ -9,7 +9,7 @@ English, including both in the same sentence.
 Nothing is saved. No audio file, no transcript, no history on disk.
 
 ```
-Hold Right Win ─▶ speak ─▶ release ─▶ ~1.5 s ─▶ text is typed at your caret
+Hold the hotkey ─▶ speak ─▶ release ─▶ ~1.5 s ─▶ text is typed at your caret
 ```
 
 ## How it works
@@ -70,7 +70,7 @@ and the hotkey is Right Command. The rest of this section is Windows.
 
    You need an **ElevenLabs** key. An **Anthropic** key is optional — without it
    you get dictation without cleanup. If you switch either step to Infomaniak
-   (see the manual), one Infomaniak token replaces them.
+   (see *Configure* below), one Infomaniak token replaces them.
 3. Run it. It lives in the tray. To start it at login, right-click the tray
    icon and tick **Start with Windows**.
 
@@ -81,15 +81,84 @@ send keystrokes to unelevated windows.
 Full instructions, settings and troubleshooting:
 **[the user manual](docs/UserDocumentation/Manual.md)**.
 
+## Configure
+
+Settings live in `config.json`: `%APPDATA%\dictate\` on Windows,
+`~/Library/Application Support/dictate/` on a Mac. A missing file means the
+defaults. Edit it, restart dictate, and use **Re-enter API keys…** in the
+tray or menu-bar menu if you switched provider.
+
+### Speech-to-text and cleanup
+
+Each step has two providers. The two steps can be mixed.
+
+| | Speech-to-text | Cleanup (LLM) | Key |
+|---|---|---|---|
+| **Default** | ElevenLabs Scribe (`scribe_v2`) | Anthropic Claude Haiku 4.5 | One ElevenLabs key, one Anthropic key |
+| **Swiss** | Infomaniak Whisper (`whisper`) | Infomaniak Gemma 4 31B | One Infomaniak token for both |
+
+Default: fastest, under 1 s to transcribe, and the best on German and English
+mixed in one sentence. You don't need a `config.json` for it.
+
+```json
+{
+  "TranscriptionProvider": "ElevenLabs",
+  "CleanupProvider": "Anthropic"
+}
+```
+
+Swiss: audio and text are processed in Switzerland. Transcription takes about
+3–4 s, because Infomaniak's speech-to-text runs as a queued job.
+
+```json
+{
+  "TranscriptionProvider": "Infomaniak",
+  "CleanupProvider": "Infomaniak"
+}
+```
+
+`TranscriptionModel` and `CleanupModel` override the model names.
+
+### The start key
+
+| | Key | What a quick tap does |
+|---|---|---|
+| **Default** | Right Windows (Right Command on a Mac) | Nothing; the key is swallowed so the Start menu stays shut |
+| **Laptop** | Caps Lock, on the left of every keyboard | Still toggles Caps Lock; only a hold of 300 ms or more dictates |
+
+Default, for keyboards that have a right Windows key:
+
+```json
+{
+  "HotkeyVirtualKey": 92,
+  "SuppressHotkey": true
+}
+```
+
+Laptop, for keyboards without one (Windows only):
+
+```json
+{
+  "HotkeyVirtualKey": 20,
+  "SuppressHotkey": true,
+  "ShortPressPassesThrough": true
+}
+```
+
+The [manual](docs/UserDocumentation/Manual.md#choosing-the-hotkey) lists the
+other keys and why most of them are a bad idea.
+
 ## Built with
 
-Rust, shipped as one ~4 MB `win-x64` executable with nothing to install. About
-22 MB of memory while running.
+Rust, shipped as one ~4 MB `win-x64` executable with nothing to install (about
+22 MB of memory while running), and as a signed, notarized `dictate.app` for
+Apple Silicon and Intel Macs.
 
 | Piece | What |
 |---|---|
 | `dictate-core` | Platform-free: the pipeline, prompt, sanitisation, degradation rules, config. Unit-tested on Linux in CI. |
 | `dictate-windows` | Every Win32 call, through [`windows-sys`](https://crates.io/crates/windows-sys): `WH_KEYBOARD_LL` hook, winmm capture, `SendInput`, Credential Manager, tray and overlay. |
+| `dictate-macos` | Every macOS call: CoreGraphics event tap, CoreAudio capture, synthetic typing, menu-bar item, Keychain. |
 | [`reqwest`](https://crates.io/crates/reqwest) | The two HTTPS calls, to the transcription and cleanup providers (ElevenLabs and Anthropic, or Infomaniak) |
 
 The split is deliberate: it keeps the whole testable half runnable on a Linux CI
