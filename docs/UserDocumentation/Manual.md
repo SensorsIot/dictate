@@ -82,7 +82,7 @@ Hold **Right Windows**, speak, release.
 | Overlay says *recording* | Listening |
 | Overlay says *transcribing* | Uploading and cleaning up |
 | Overlay clears, text appears | Done |
-| Notification | Something failed — the notification says what |
+| Notification | Something went wrong. It says what happened to your words — not transcribed, typed as spoken, or on the clipboard — and what to do: wait out an outage, top up a provider, or re-enter a key |
 
 You don't have to wait for the text before the next sentence: press again
 while it is still *transcribing* and it records at once. The sentences are
@@ -248,8 +248,10 @@ Turn the diagnostic log on first — it answers most of these directly.
 | A German sentence comes back in English | A bug, not a setting. Cleanup is explicitly instructed never to translate. Please report it. |
 | A term is consistently mis-spelled | Add it to `Vocabulary` in the config. |
 | The hotkey does nothing | Check the tray icon is there. If it is, restart dictate — another application may have taken the low-level hook. |
-| Every utterance fails with a 4xx | Key wrong or expired: tray menu → **Re-enter API keys…**, then restart. |
-| Every utterance fails mentioning a model | ElevenLabs changed the Scribe model identifier; set `ScribeModelId` in the config. |
+| "*Provider* is overloaded" or "is having problems" | An outage at that provider, not on your side. Wait a few minutes. The diagnostic log has the provider's request id if you want to report it. |
+| "*Provider* credit used up" | Top up at that provider — the notification says where. For ElevenLabs, the monthly reset also restores it. |
+| "*Provider* rejected the API key" | Key wrong, revoked or expired: tray menu → **Re-enter API keys…**, then restart. |
+| "*Provider* rejected the request" | Usually a model the provider no longer offers; the notification quotes the provider. Set `TranscriptionModel` or `CleanupModel` in the config. |
 
 ### Rotating a leaked API key
 

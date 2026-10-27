@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::diagnostic_log::{field, DiagnosticLog, Field};
+use crate::notice::{self, Notice};
 use crate::{text_sanitizer, DictateConfig, DictationPipeline, RecentUtterances, TargetContext, Utterance, UtteranceStatus};
 
 /// How many delivered utterances stay recoverable. In memory only (FR-17.2).
@@ -84,6 +85,8 @@ pub trait Platform {
 
     fn notify(&self, title: &str, detail: &str);
 
+    /// The error is a sentence for the user. A trailing `[…]` holds detail
+    /// for the diagnostic log only and is not shown.
     fn type_text(&self, text: &str, config: &DictateConfig) -> Result<(), String>;
 
     fn copy_to_clipboard(&self, text: &str) -> Result<(), String>;
@@ -187,7 +190,7 @@ impl<P: Platform> Session<P> {
         }
 
         if !self.platform.has_input_device() {
-            self.platform.notify("No microphone", "dictate found no audio input device.");
+            self.tell(notice::no_microphone());
             return;
         }
 
@@ -218,7 +221,8 @@ impl<P: Platform> Session<P> {
             self.deliver_ready();
         }
 
-        self.platform.notify("Could not start recording", &error);
+        // The device's own error is in the log; the user needs the remedy.
+        self.tell(notice::microphone_failed());
     }
 
     pub fn end(&mut self, reason: StopReason) {
@@ -244,13 +248,7 @@ impl<P: Platform> Session<P> {
         }
 
         if reason == StopReason::Limit {
-            self.platform.notify(
-                "Recording limit reached",
-                &format!(
-                    "Stopped after {}s. Transcribing what was captured.",
-                    self.config.maximum_recording_seconds
-                ),
-            );
+            self.tell(notice::limit_reached(self.config.maximum_recording_seconds));
         }
 
         let pinned = self.pinned.take();
@@ -270,7 +268,9 @@ impl<P: Platform> Session<P> {
             // The pipeline degrades internally; a panic means something outside
             // its contract broke. It costs one utterance, never the session.
             let utterance = panic::catch_unwind(AssertUnwindSafe(|| pipeline.process(&pcm, &target)))
-                .unwrap_or_else(|_| Utterance::fail("The pipeline hit an internal error."));
+                .unwrap_or_else(|_| {
+                    Utterance::fail("The pipeline hit an internal error.").with_notice(notice::internal_error())
+                });
             let _ = results.send((id, utterance));
         }));
 
@@ -333,7 +333,7 @@ impl<P: Platform> Session<P> {
 
     fn deliver(&mut self, utterance: &Utterance, pinned: Option<P::Target>) {
         if utterance.status == UtteranceStatus::Failed {
-            self.platform.notify("Dictation failed", utterance.error.as_deref().unwrap_or("Unknown error."));
+            self.tell(utterance.notice.clone().unwrap_or_else(notice::internal_error));
             return;
         }
 
@@ -346,8 +346,9 @@ impl<P: Platform> Session<P> {
         if utterance.status == UtteranceStatus::CleanupFailed {
             // Delivered verbatim rather than lost (FR-7.1), but the user is told
             // so an unusually rough sentence is explained.
-            self.platform
-                .notify("Delivered without cleanup", utterance.error.as_deref().unwrap_or("Cleanup failed."));
+            if let Some(notice) = utterance.notice.clone() {
+                self.tell(notice);
+            }
         }
 
         // Before delivery, not after: if typing fails, or lands somewhere the
@@ -363,8 +364,7 @@ impl<P: Platform> Session<P> {
         // FR-6.2: the target that had focus at press time, or nothing.
         if Some(self.platform.focused()) != pinned {
             self.log.event("delivery", &[field("method", "clipboard"), field("reason", "focus-changed")]);
-            let detail = format!("The text is on the clipboard — press {}.", self.platform.paste_hint());
-            self.to_clipboard(&utterance.text, "Focus changed", &detail);
+            self.to_clipboard(&utterance.text, notice::focus_changed(self.platform.paste_hint()));
             return;
         }
 
@@ -382,18 +382,23 @@ impl<P: Platform> Session<P> {
             }
             Err(error) => {
                 self.log.event("delivery.failed", &[field("error", error.as_str())]);
-                self.to_clipboard(&utterance.text, "Could not type the text", &error);
+                self.to_clipboard(&utterance.text, notice::typing_failed(&error, self.platform.paste_hint()));
             }
         }
     }
 
-    fn to_clipboard(&self, text: &str, title: &str, detail: &str) {
+    fn to_clipboard(&self, text: &str, why: Notice) {
         match self.platform.copy_to_clipboard(text) {
-            Ok(()) => self.platform.notify(title, detail),
+            Ok(()) => self.tell(why),
             Err(error) => {
-                self.platform.notify("Text could not be delivered", &format!("{detail} Clipboard also failed: {error}"))
+                self.log.event("clipboard.failed", &[field("error", error)]);
+                self.tell(notice::not_delivered());
             }
         }
+    }
+
+    fn tell(&self, notice: Notice) {
+        self.platform.notify(&notice.title, &notice.detail);
     }
 }
 

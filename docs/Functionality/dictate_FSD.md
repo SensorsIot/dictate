@@ -341,12 +341,44 @@ and the failure shall be surfaced to the user.
 **FR-7.3** [Must] `[derived]` If transcription succeeds but recognises nothing,
 the session shall end without delivering text and without an error sound.
 
-**FR-7.4** [Must] `[derived]` An error surfaced to the user shall include the
-message returned by the failing service, truncated to 500 characters.
+**FR-7.4** [Must] `[derived]` A service failure surfaced to the user shall
+quote the service's own explanation where it gave one and it fits the
+notification; the diagnostic log shall carry the full response, truncated to
+500 characters.
 
 > Rationale: an invalid `model_id` comes back from Scribe as a 422 listing the
 > values it accepts. Swallowing that text turns a 30-second fix into a debugging
-> session.
+> session. Only the human sentence is quoted — the JSON around it, the status
+> code and the request id go to the log, because a Windows balloon holds 255
+> characters and the user can act on none of them.
+
+**FR-7.5** [Must] `[user]` A service failure shall be classified by what the
+user can do about it, and the notification shall name the service and say it:
+
+| Class | Recognised by | The user is told |
+|---|---|---|
+| Overloaded | 429 with `system_busy` or `overloaded`; 503; 529 | the problem is at the service; wait a few minutes |
+| Server fault | any other 5xx | the same |
+| Rate limited | any other 429 | wait a minute; if it keeps happening, the plan allows too few requests |
+| Out of credit | 402, or `quota_exceeded`, `insufficient_quota`, `credit balance`, `usage limit`, `payment_required` in the body, whatever the status | where to top up that service |
+| Key rejected | any other 401 or 403 | enter a new key via **Re-enter API keys…** and restart |
+| Rejected | any other 4xx | check the model setting, quoting the service |
+| Unreachable | no connection | check the internet connection |
+| Timed out | no answer within the configured timeout | wait and retry; check the connection if every dictation times out |
+
+The body decides before the status does: ElevenLabs reports an exhausted quota
+as 401 and an outage as 429, and Anthropic reports an empty balance as 400. A
+transcription failure says the words were not transcribed and ends in
+"dictate again"; a cleanup failure says the words were typed as spoken
+(FR-7.1) and asks nothing when there is nothing for the user to do.
+
+> **VC** — *Pre:* the response bodies recorded in the diagnostic log (ElevenLabs
+> `system_busy`, `quota_exceeded`) and the documented Anthropic and Infomaniak
+> error shapes. *Stimulus:* classify each, and build both notices for every
+> service × status × body. *Expect:* the class in the table; the outage notice
+> says wait, the credit notice names where to top up. *Must not:* a status code,
+> JSON, a request id, or more than 255 characters in any notice; a quota
+> failure sending the user to replace a working key. *Tier:* host.
 
 ---
 
@@ -714,6 +746,18 @@ needs to act or something went wrong.
 
 > There are no per-utterance status popups: a balloon after every successful dictation is noise, and noise trains people to
 > ignore the balloons that matter. Routine timings belong in the diagnostic log.
+
+**FR-14.6** [Must] `[user]` Every notification shall be written for the user:
+it says what happened to their words — not transcribed, typed as spoken, on the
+clipboard — and what, if anything, they should do, naming the menu item or
+setting involved. Device errors, Win32 codes and HTTP status belong in the
+diagnostic log, never in the notification. Title at most 63 characters, text at
+most 255 (the Windows balloon limits).
+
+> Rationale: "Scribe returned 429 Too Many Requests: {"detail":…" told the user
+> nothing they could act on, and cut off before the one readable sentence.
+> Every notice is written in `dictate-core/src/notice.rs`, so the wording is
+> one file to review and the same on both platforms.
 
 **FR-14.3** [Won't] `[user]` dictate makes no sound.
 

@@ -15,7 +15,7 @@
 # Read `last_result`, not `status`.
 
 version: 1
-updated: 2026-08-16
+updated: 2026-10-27
 
 tiers:
   host:
@@ -335,6 +335,46 @@ tests:
     must_not: a press ignored while processing; a later utterance typed before an earlier one; one utterance's text in another's target; a keystroke while the hotkey is held
     status: implemented
     last_result: pass        # run 39489817776, 2026-10-20
+
+  - id: H-26
+    name: Service failures are classified by what the user can do, and the notice says it
+    kind: atomic
+    scenario: deviation
+    tier: host
+    file: dictate-core/tests/notices.rs
+    verifies: [FR-7.4, FR-7.5]
+    must_not: a quota failure sending the user to replace a working key; the full response missing from the log
+    status: implemented
+    last_result: never_run
+    note: >
+      The ElevenLabs bodies are verbatim from the diagnostic log (system_busy on
+      2026-10-27, quota_exceeded on 2026-10-22). The unreachable case uses a
+      refused connection to 127.0.0.1:9, so no network is needed.
+
+  - id: H-27
+    name: No notice shows a status code, JSON or request id, or overflows a Windows balloon
+    kind: atomic
+    scenario: negative
+    tier: host
+    file: dictate-core/tests/notices.rs
+    verifies: [FR-14.6, FR-7.4]
+    must_not: "{, <, request_id, returned, or any HTTP status in a title or text; a title over 63 or text over 255 characters"
+    status: implemented
+    last_result: never_run
+    note: >
+      Every service × eleven statuses × eleven bodies, both stages, plus the
+      platform's bracketed log detail on a typing failure.
+
+  - id: H-28
+    name: A failed dictation tells the user what to do, never the device's or service's raw error
+    kind: atomic
+    scenario: deviation
+    tier: host
+    file: dictate-core/tests/session.rs
+    verifies: [FR-14.6, FR-7.2, FR-7.5]
+    must_not: the device error shown; anything typed after a failed transcription
+    status: implemented
+    last_result: never_run
 
   # ---- ci tier ---------------------------------------------------------------
 

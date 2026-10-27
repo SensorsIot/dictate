@@ -4,6 +4,7 @@ use crate::audio_level;
 use crate::cleaner::Cleaner;
 use crate::config::DictateConfig;
 use crate::model::{TargetContext, Utterance, UtteranceStatus};
+use crate::notice;
 use crate::scribe::Transcriber;
 use crate::text_sanitizer;
 use crate::wav;
@@ -34,7 +35,7 @@ impl DictationPipeline {
 
     pub fn process(&self, pcm: &[u8], target: &TargetContext) -> Utterance {
         if pcm.is_empty() {
-            return Utterance::fail("No audio was captured.");
+            return Utterance::fail("No audio was captured.").with_notice(notice::no_audio());
         }
 
         // A device can return well-formed frames that are digital silence — a
@@ -47,7 +48,8 @@ impl DictationPipeline {
                 "The microphone produced only silence for {:.1}s. \
                  Check the input device, its gain, and that it is not muted.",
                 wav::duration_of(pcm.len()).as_secs_f64()
-            ));
+            ))
+            .with_notice(notice::silent_microphone());
         }
 
         let wav = wav::from_pcm16(pcm);
@@ -55,7 +57,10 @@ impl DictationPipeline {
         let clock = Instant::now();
         let transcript = match self.transcriber.transcribe(&wav, self.config.language) {
             Ok(transcript) => transcript,
-            Err(error) => return Utterance::fail(format!("Transcription failed: {error}")),
+            Err(error) => {
+                return Utterance::fail(format!("Transcription failed: {error}"))
+                    .with_notice(notice::transcription_failed(&error))
+            }
         };
         let transcribe_time = clock.elapsed();
 
@@ -66,6 +71,7 @@ impl DictationPipeline {
                 raw_text: String::new(),
                 language_code: transcript.language_code,
                 error: Some("Nothing was recognised in the audio.".into()),
+                notice: Some(notice::nothing_recognised()),
                 transcribe_time,
                 cleanup_time: Duration::ZERO,
             };
@@ -75,17 +81,25 @@ impl DictationPipeline {
         let (cleaned, cleanup_error) = match self.cleaner.clean(&transcript.text, target) {
             // An empty cleanup result means the model dropped the utterance —
             // treat that as a failure of cleanup, not as a silent deletion.
-            Ok(cleaned) if cleaned.is_empty() => (transcript.text.clone(), Some("Cleanup returned nothing.".to_owned())),
+            Ok(cleaned) if cleaned.is_empty() => {
+                (transcript.text.clone(), Some(("Cleanup returned nothing.".to_owned(), notice::cleanup_empty())))
+            }
             // FR-11.5, enforced rather than requested: a model that answers a
             // fragment ("I have no transcript to clean…") must not have its
             // answer typed into the user's window.
             Ok(cleaned) if !is_plausible_cleanup(&transcript.text, &cleaned) => (
                 transcript.text.clone(),
-                Some("Cleanup replied instead of cleaning; the transcript was delivered as spoken.".to_owned()),
+                Some((
+                    "Cleanup replied instead of cleaning; the transcript was delivered as spoken.".to_owned(),
+                    notice::cleanup_answered(),
+                )),
             ),
             Ok(cleaned) => (cleaned, None),
-            Err(error) => (transcript.text.clone(), Some(format!("Cleanup failed: {error}"))),
+            Err(error) => {
+                (transcript.text.clone(), Some((format!("Cleanup failed: {error}"), notice::cleanup_failed(&error))))
+            }
         };
+        let (cleanup_error, cleanup_notice) = cleanup_error.unzip();
         let cleanup_time = clock.elapsed();
 
         let cleaned = if self.config.swiss_spelling {
@@ -100,6 +114,7 @@ impl DictationPipeline {
             raw_text: transcript.text,
             language_code: transcript.language_code,
             error: cleanup_error,
+            notice: cleanup_notice,
             transcribe_time,
             cleanup_time,
         }

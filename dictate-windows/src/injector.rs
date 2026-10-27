@@ -69,11 +69,12 @@ fn send_chunk(chunk: &[u16]) -> Result<(), String> {
     }
 
     // Most often UIPI: the foreground window belongs to an elevated process and
-    // refuses input from this one.
+    // refuses input from this one. The text is shown to the user (FR-14.6);
+    // the Win32 code rides along in brackets for the diagnostic log.
     let error = unsafe { GetLastError() };
+    let what = if sent == 0 { "dictate could not type into this window" } else { "Only part of the text was typed" };
     Err(format!(
-        "SendInput delivered {sent} of {} events (Win32 error {error}). \
-         If the focused window is running as administrator, dictate cannot type into it.",
+        "{what}. Windows blocks typing into a window that runs as administrator. [SendInput {sent}/{}, error {error}]",
         inputs.len()
     ))
 }

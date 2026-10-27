@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::notice::Notice;
+
 /// What had focus when the hotkey went down. Captured on the Windows side and
 /// handed to the pipeline so cleanup can adapt formatting, and so the injector
 /// knows whether it is typing into a console.
@@ -211,7 +213,10 @@ pub struct Utterance {
     /// The verbatim transcript, kept so the tray can offer it when cleanup went wrong.
     pub raw_text: String,
     pub language_code: Option<String>,
+    /// The full cause, for the diagnostic log.
     pub error: Option<String>,
+    /// What the user is told (FR-14.6).
+    pub notice: Option<Notice>,
     pub transcribe_time: Duration,
     pub cleanup_time: Duration,
 }
@@ -224,9 +229,14 @@ impl Utterance {
             raw_text: String::new(),
             language_code: None,
             error: Some(error.into()),
+            notice: None,
             transcribe_time: Duration::ZERO,
             cleanup_time: Duration::ZERO,
         }
+    }
+
+    pub fn with_notice(self, notice: Notice) -> Self {
+        Self { notice: Some(notice), ..self }
     }
 
     pub fn has_text(&self) -> bool {

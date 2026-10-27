@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use dictate_core::{
-    Cleaner, DiagnosticLog, DictateConfig, DictationPipeline, Error, LanguageMode, Platform, Session, SessionState,
-    StopReason, TargetContext, Transcriber, Transcript,
+    Cleaner, DiagnosticLog, DictateConfig, DictationPipeline, Error, LanguageMode, Platform, Service, Session,
+    SessionState, StopReason, TargetContext, Transcriber, Transcript,
 };
 
 /// Everything the fake platform was asked to do, and the one thing a test
@@ -22,6 +22,7 @@ struct World {
     typed: Vec<String>,
     clipboard: Vec<String>,
     notices: Vec<String>,
+    details: Vec<String>,
     states: Vec<SessionState>,
 }
 
@@ -59,8 +60,9 @@ impl Platform for FakePlatform {
         self.0.borrow_mut().states.push(state);
     }
 
-    fn notify(&self, title: &str, _detail: &str) {
+    fn notify(&self, title: &str, detail: &str) {
         self.0.borrow_mut().notices.push(title.to_owned());
+        self.0.borrow_mut().details.push(detail.to_owned());
     }
 
     fn type_text(&self, text: &str, _config: &DictateConfig) -> Result<(), String> {
@@ -205,7 +207,7 @@ fn a_focus_change_sends_the_text_to_the_clipboard_and_types_nothing() {
     let world = world.borrow();
     assert!(world.typed.is_empty(), "nothing may be typed into a window the user did not dictate into");
     assert_eq!(world.clipboard.last().map(String::as_str), Some("So the thing is."));
-    assert_eq!(world.notices, ["Focus changed"]);
+    assert_eq!(world.notices, ["Your text is on the clipboard"]);
 }
 
 #[test]
@@ -283,7 +285,7 @@ fn each_utterance_goes_only_to_the_window_focused_at_its_own_press() {
     let world = world.borrow();
     assert_eq!(world.typed, ["sentence 2 "], "the first sentence may not be typed into the second window");
     assert!(world.clipboard.iter().any(|text| text == "sentence 1"));
-    assert_eq!(world.notices, ["Focus changed"]);
+    assert_eq!(world.notices, ["Your text is on the clipboard"]);
 }
 
 #[test]
@@ -344,7 +346,7 @@ fn typing_that_fails_leaves_the_text_on_the_clipboard() {
 
     let world = world.borrow();
     assert_eq!(world.clipboard.last().map(String::as_str), Some("So the thing is."));
-    assert_eq!(world.notices, ["Could not type the text"]);
+    assert_eq!(world.notices, ["Your text is on the clipboard"]);
 }
 
 #[test]
@@ -356,7 +358,7 @@ fn a_failed_transcription_is_reported_and_nothing_is_typed() {
     let world = world.borrow();
     assert!(world.typed.is_empty());
     assert!(world.clipboard.is_empty());
-    assert_eq!(world.notices, ["Dictation failed"]);
+    assert_eq!(world.notices, ["Transcription failed"]);
     assert!(session.recent.is_empty());
 }
 
@@ -368,7 +370,7 @@ fn without_a_microphone_the_press_says_so_and_starts_nothing() {
     session.begin(Instant::now(), Vec::new());
 
     assert_eq!(session.state(), SessionState::Idle);
-    assert_eq!(world.borrow().notices, ["No microphone"]);
+    assert_eq!(world.borrow().notices, ["No microphone found"]);
     assert_eq!(world.borrow().captures_started, 0);
 }
 
@@ -380,7 +382,7 @@ fn a_device_that_fails_to_open_returns_to_idle_and_says_why() {
     session.capture_failed();
 
     assert_eq!(session.state(), SessionState::Idle);
-    assert_eq!(world.borrow().notices, ["Could not start recording"]);
+    assert_eq!(world.borrow().notices, ["The microphone would not open"]);
 }
 
 #[test]
@@ -403,6 +405,32 @@ fn the_limit_tells_the_user_and_still_transcribes() {
     session.finish();
 
     let world = world.borrow();
-    assert_eq!(world.notices, ["Recording limit reached"]);
+    assert!(world.notices[0].starts_with("Recording stopped at"));
     assert_eq!(world.typed, ["So the thing is. "]);
+}
+
+#[test]
+fn an_overloaded_service_tells_the_user_to_wait_and_types_nothing() {
+    let busy = r#"{"detail":{"code":"system_busy","message":"We are sorry, the system is experiencing heavy traffic."}}"#;
+    let (mut session, world) = session_with(Err(Error::from_response(Service::ElevenLabs, 429, busy)), |_| {});
+
+    dictate(&mut session);
+
+    let world = world.borrow();
+    assert!(world.typed.is_empty());
+    assert_eq!(world.notices, ["ElevenLabs is overloaded"]);
+    assert!(world.details[0].contains("Wait a few minutes"));
+    assert!(!world.details[0].contains("429"));
+}
+
+#[test]
+fn a_device_error_is_logged_but_the_user_is_told_what_to_do() {
+    let (mut session, world) = session();
+
+    session.begin(Instant::now(), Vec::new());
+    session.capture_failed();
+
+    let world = world.borrow();
+    assert!(!world.details[0].contains("device busy"));
+    assert!(world.details[0].contains("Microphone"));
 }

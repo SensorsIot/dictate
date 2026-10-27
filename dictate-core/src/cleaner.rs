@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 
 use crate::cleanup_prompt;
 use crate::config::DictateConfig;
-use crate::error::Error;
+use crate::error::{Error, Service};
 use crate::model::TargetContext;
 use crate::truncate;
 
@@ -92,18 +92,14 @@ impl Cleaner for HaikuCleaner {
             .header("anthropic-version", API_VERSION)
             .header(CONTENT_TYPE, "application/json")
             .body(body.to_string())
-            .send()?;
+            .send()
+            .map_err(|e| Error::transport(Service::Anthropic, e))?;
 
         let status = response.status();
-        let text = response.text()?;
+        let text = response.text().map_err(|e| Error::transport(Service::Anthropic, e))?;
 
         if !status.is_success() {
-            return Err(Error::new(format!(
-                "Anthropic returned {} {}: {}",
-                status.as_u16(),
-                status.canonical_reason().unwrap_or(""),
-                truncate(&text, 500)
-            )));
+            return Err(Error::from_response(Service::Anthropic, status.as_u16(), &text));
         }
 
         Self::extract_text(&text)

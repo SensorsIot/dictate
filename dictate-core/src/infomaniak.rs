@@ -4,8 +4,8 @@
 //!
 //! The API is split across versions: chat lives under `/2/…/openai/v1`, while
 //! transcription and its results exist only under `/1/` (there is no v2
-//! audio route). The two versions also format errors differently, which is
-//! why failures carry the raw body rather than a parsed message.
+//! audio route). The two versions also format errors differently; `Error`
+//! looks for the message in both shapes.
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use crate::cleaner::Cleaner;
 use crate::cleanup_prompt;
 use crate::config::DictateConfig;
-use crate::error::Error;
+use crate::error::{Error, ErrorKind, Service};
 use crate::model::{LanguageMode, TargetContext, Transcript};
 use crate::scribe::Transcriber;
 use crate::truncate;
@@ -55,8 +55,8 @@ impl InfomaniakAccount {
             .get(format!("{API}/1/ai"))
             .bearer_auth(&self.token)
             .timeout(Duration::from_secs(10))
-            .send()?;
-        let id = Self::parse_product_id(&checked(response, "Infomaniak")?)?;
+            .send();
+        let id = Self::parse_product_id(&checked(response)?)?;
         *cached = Some(id);
         Ok(id)
     }
@@ -170,17 +170,18 @@ impl Transcriber for InfomaniakTranscriber {
             .bearer_auth(&self.account.token)
             .multipart(form)
             .timeout(remaining())
-            .send()?;
-        let batch = Self::parse_batch_id(&checked(response, "Infomaniak")?)?;
+            .send();
+        let batch = Self::parse_batch_id(&checked(response)?)?;
 
         // Each poll takes about a second on Infomaniak's side, so the pause
         // between them is short: it only keeps a fast failure from spinning.
         loop {
             if remaining().is_zero() {
-                return Err(Error::new(format!(
-                    "Infomaniak did not finish transcribing within {} s",
-                    self.deadline.as_secs()
-                )));
+                return Err(Error::of(
+                    Service::Infomaniak,
+                    ErrorKind::TimedOut,
+                    format!("Infomaniak did not finish transcribing within {} s", self.deadline.as_secs()),
+                ));
             }
             let response = self
                 .account
@@ -188,8 +189,8 @@ impl Transcriber for InfomaniakTranscriber {
                 .get(format!("{API}/1/ai/{product}/results/{batch}"))
                 .bearer_auth(&self.account.token)
                 .timeout(remaining())
-                .send()?;
-            match Self::parse_result(&checked(response, "Infomaniak")?)? {
+                .send();
+            match Self::parse_result(&checked(response)?)? {
                 BatchState::Done(transcript) => return Ok(transcript),
                 BatchState::Running => thread::sleep(Duration::from_millis(100).min(remaining())),
             }
@@ -257,28 +258,24 @@ impl Cleaner for InfomaniakCleaner {
             .header(CONTENT_TYPE, "application/json")
             .body(body.to_string())
             .timeout(self.timeout)
-            .send()?;
+            .send();
 
-        Self::extract_text(&checked(response, "Infomaniak")?)
+        Self::extract_text(&checked(response)?)
     }
 }
 
 // ---- Shared -----------------------------------------------------------------
 
-/// The body of a successful response; otherwise an error carrying the API's
-/// own words (FR-7.4).
-fn checked(response: reqwest::blocking::Response, service: &str) -> Result<String, Error> {
+/// The body of a successful response; otherwise an error sorted by what the
+/// user can do about it, carrying the API's own words (FR-7.4, FR-7.5).
+fn checked(response: reqwest::Result<reqwest::blocking::Response>) -> Result<String, Error> {
+    let response = response.map_err(|e| Error::transport(Service::Infomaniak, e))?;
     let status = response.status();
-    let text = response.text()?;
+    let text = response.text().map_err(|e| Error::transport(Service::Infomaniak, e))?;
     if status.is_success() {
         Ok(text)
     } else {
-        Err(Error::new(format!(
-            "{service} returned {} {}: {}",
-            status.as_u16(),
-            status.canonical_reason().unwrap_or(""),
-            truncate(&text, 500)
-        )))
+        Err(Error::from_response(Service::Infomaniak, status.as_u16(), &text))
     }
 }
 

@@ -4,7 +4,7 @@ use reqwest::blocking::multipart::{Form, Part};
 use reqwest::blocking::Client;
 use serde_json::Value;
 
-use crate::error::Error;
+use crate::error::{Error, Service};
 use crate::model::{LanguageMode, Transcript};
 use crate::truncate;
 
@@ -81,20 +81,16 @@ impl Transcriber for ScribeTranscriber {
             .post(ENDPOINT)
             .header("xi-api-key", self.api_key.as_str())
             .multipart(form)
-            .send()?;
+            .send()
+            .map_err(|e| Error::transport(Service::ElevenLabs, e))?;
 
         let status = response.status();
-        let body = response.text()?;
+        let body = response.text().map_err(|e| Error::transport(Service::ElevenLabs, e))?;
 
         if !status.is_success() {
             // The body carries the useful part — an invalid model_id comes back
             // as a 422 listing the values it will accept.
-            return Err(Error::new(format!(
-                "Scribe returned {} {}: {}",
-                status.as_u16(),
-                status.canonical_reason().unwrap_or(""),
-                truncate(&body, 500)
-            )));
+            return Err(Error::from_response(Service::ElevenLabs, status.as_u16(), &body));
         }
 
         Self::parse(&body)
