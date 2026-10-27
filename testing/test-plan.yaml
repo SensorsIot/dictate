@@ -345,7 +345,7 @@ tests:
     verifies: [FR-7.4, FR-7.5]
     must_not: a quota failure sending the user to replace a working key; the full response missing from the log
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 40474456817, 2026-10-27
     note: >
       The ElevenLabs bodies are verbatim from the diagnostic log (system_busy on
       2026-10-27, quota_exceeded on 2026-10-22). The unreachable case uses a
@@ -360,7 +360,7 @@ tests:
     verifies: [FR-14.6, FR-7.4]
     must_not: "{, <, request_id, returned, or any HTTP status in a title or text; a title over 63 or text over 255 characters"
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 40474456817, 2026-10-27
     note: >
       Every service × eleven statuses × eleven bodies, both stages, plus the
       platform's bracketed log detail on a typing failure.
@@ -374,7 +374,7 @@ tests:
     verifies: [FR-14.6, FR-7.2, FR-7.5]
     must_not: the device error shown; anything typed after a failed transcription
     status: implemented
-    last_result: never_run
+    last_result: pass        # run 40474456817, 2026-10-27
 
   # ---- ci tier ---------------------------------------------------------------
 

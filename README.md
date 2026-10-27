@@ -211,7 +211,7 @@ rest.
 
 ## Status
 
-Working and in daily use. 105 automated tests, all passing; the pipeline,
+Working and in daily use. 120 automated tests, all passing; the pipeline,
 latency, memory behaviour and delivery paths are measured on real
 hardware.
 
