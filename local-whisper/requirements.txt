@@ -1,0 +1,4 @@
+faster-whisper>=1.2,<2
+# PyAV 19 removed metadata_errors, which faster-whisper 1.2 uses.
+av>=11,<19
+json5>=0.9,<1

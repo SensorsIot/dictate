@@ -14,6 +14,7 @@ Not planes, but load-bearing:
 | File | Contents |
 |---|---|
 | [`../testing/test-plan.yaml`](../testing/test-plan.yaml) | Every test: its tier, the requirements it discharges, what it last produced |
+| [`UserDocumentation/Windows-Installation.md`](UserDocumentation/Windows-Installation.md) | General Windows local-Whisper installer, CPU/GPU choices, laptop profile and recovery |
 
 ## Routing rule
 

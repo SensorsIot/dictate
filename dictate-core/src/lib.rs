@@ -12,6 +12,7 @@ pub mod config;
 pub mod diagnostic_log;
 mod error;
 pub mod infomaniak;
+pub mod local_whisper;
 pub mod model;
 pub mod notice;
 pub mod pipeline;

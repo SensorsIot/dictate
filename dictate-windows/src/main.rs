@@ -90,10 +90,12 @@ fn start() -> i32 {
         }
     };
 
-    // The transcription provider's key is the one dictate cannot run without.
-    let transcription_key = credentials::target(config.transcription_provider.credential());
-    if credentials::read(transcription_key).is_none() && (!auth::prompt() || credentials::read(transcription_key).is_none()) {
-        return 3;
+    // Local transcription requires no cloud key.
+    if let Some(credential) = config.transcription_provider.credential() {
+        let transcription_key = credentials::target(credential);
+        if credentials::read(transcription_key).is_none() && (!auth::prompt() || credentials::read(transcription_key).is_none()) {
+            return 3;
+        }
     }
 
     let (transcriber, cleaner) = match providers::build(&config, |c| credentials::read(credentials::target(c))) {

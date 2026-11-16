@@ -134,8 +134,8 @@ Switzerland. One Infomaniak token covers both.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `TranscriptionProvider` | `ElevenLabs` | `Infomaniak` for Whisper hosted in Switzerland. Noticeably slower: typically 3–4 s per utterance instead of under 1 s |
-| `CleanupProvider` | `Anthropic` | `Infomaniak` for cleanup hosted in Switzerland |
+| `TranscriptionProvider` | `ElevenLabs` | `Infomaniak` for Whisper hosted in Switzerland, or `LocalWhisper` for speech-to-text on this computer (chapter 7) |
+| `CleanupProvider` | `Anthropic` | `Infomaniak` for cleanup hosted in Switzerland, or `None` to disable cleanup even when keys are stored |
 | `TranscriptionModel` | provider's default | `scribe_v2` (from `ScribeModelId`) for ElevenLabs, `whisper` for Infomaniak |
 | `CleanupModel` | provider's default | `claude-haiku-4-5` for Anthropic, `google/gemma-4-31B-it` for Infomaniak. Other Infomaniak models tested worse: they translated or answered instead of cleaning |
 | `InfomaniakProductId` | found automatically | Only needed if your Infomaniak account has more than one AI Services product |
@@ -258,3 +258,106 @@ Turn the diagnostic log on first — it answers most of these directly.
 Revoke it at the provider first, then tray menu → **Re-enter API keys…** and
 restart dictate. Keys live in Windows Credential Manager under `dictate:*`, never
 in a file, so there is nothing else to clean up.
+
+## 7. Local Whisper speech-to-text
+
+Local Whisper runs OpenAI's speech recognition models through
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper). Dictate sends audio
+only to the local service at `127.0.0.1`. Audio and transcripts stay in memory;
+downloaded model weights remain cached on disk. There is no cloud fallback.
+
+### Select the model
+
+Edit `%APPDATA%\dictate\config.json` (or the Mac configuration file):
+
+```json
+{
+  "TranscriptionProvider": "LocalWhisper",
+  "TranscriptionModel": "turbo",
+  "CleanupProvider": "None",
+  "LocalWhisperPort": 8178,
+  "LocalWhisperTimeoutSeconds": 60
+}
+```
+
+`TranscriptionModel` is the speech-to-text model selection. Supported values:
+
+| Models | Use |
+|---|---|
+| `tiny`, `base` | Smaller models for limited hardware |
+| `small`, `medium` | Larger alternatives to compare for your language and hardware |
+| `large-v1`, `large-v2`, `large-v3` | Full large models, requiring more memory and processing |
+| `turbo` | Optimized large-v3 model; default for local speech-to-text |
+| `tiny.en`, `base.en`, `small.en`, `medium.en` | English-only variants; use multilingual models for German |
+
+`turbo` is a reasonable starting point for an RTX 2070 SUPER with 8 GB VRAM.
+The service uses `int8_float16` on NVIDIA GPUs to reduce memory consumption.
+Speed and available memory depend on other running applications; try `small`
+if memory or latency is a problem. GPU performance has to be measured on the
+target PC. `Language` and `Vocabulary` also apply to local transcription.
+
+`CleanupProvider: None` makes dictation fully local and requires no API keys.
+Selecting Anthropic or Infomaniak cleanup sends the recognized text to that
+provider when its key is stored. Swiss spelling and safe text delivery apply
+with cleanup disabled too.
+
+### Install the optional runtime
+
+For a Windows PC or laptop, follow the
+[general scripted installation](Windows-Installation.md). It includes CPU/GPU
+commands, model changes, login startup, recovery and an optional laptop profile.
+The commands below describe manual runtime management instead.
+
+The normal cloud mode still needs only the Dictate executable. Local mode also
+needs the repository's `local-whisper` directory and Python 3.9 or newer.
+From the repository folder, in PowerShell:
+
+```powershell
+py -3 -m venv .venv-whisper
+.\.venv-whisper\Scripts\python.exe -m pip install -r local-whisper\requirements.txt
+```
+
+For NVIDIA GPU execution, install CUDA 12 cuBLAS and cuDNN 9 libraries and make
+their DLL directories available on `PATH`, following the
+[faster-whisper GPU requirements](https://github.com/SYSTRAN/faster-whisper#gpu).
+On Windows, install the optional cuBLAS pip runtime into the same environment:
+
+```powershell
+.\.venv-whisper\Scripts\python.exe -m pip install -r local-whisper\requirements-gpu.txt
+```
+
+The service discovers NVIDIA pip DLLs automatically without changing the
+system `PATH`. CTranslate2 4.9 bundles cuDNN; versions without it still need
+cuDNN 9 installed separately.
+The NVIDIA display driver alone does not supply these runtime libraries.
+CPU execution is available without CUDA. Macs use the CPU backend.
+
+### Start and change models
+
+Start the service with the same configuration Dictate reads:
+
+```powershell
+.\.venv-whisper\Scripts\python.exe local-whisper\server.py --device cuda
+```
+
+The first start downloads the selected model. Wait for `Ready`, keep the service
+running, then start the newly built Dictate executable. No Whisper model download
+or installation happens automatically inside the tray application.
+
+Use `--device cpu` on a PC without a supported NVIDIA GPU, or omit `--device`
+to detect NVIDIA hardware automatically. Automatic detection does not hide CUDA
+installation failures by switching to CPU. On macOS/Linux use
+`.venv-whisper/bin/python` in place of the Windows Python path.
+
+To use another configuration file, append `--config "path/to/config.json"`.
+Add `--offline` after the first download to require cached model files only.
+For example, to switch to `small`, edit `TranscriptionModel` to `small`, stop
+the service with Ctrl+C, start it again, wait for `Ready`, and restart Dictate.
+The service keeps one model loaded and rejects mismatched requests.
+
+If Dictate cannot reach the service, start it and check that `LocalWhisperPort`
+matches. On a timeout, try a smaller model or raise
+`LocalWhisperTimeoutSeconds`. On startup or GPU errors, check the service's
+terminal and verify the CUDA libraries and available GPU memory. Quitting
+Dictate leaves the independently started service running; stop the service to
+release its model memory.

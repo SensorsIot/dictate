@@ -75,7 +75,26 @@ struct Hook {
     /// mid-press — and the down has already reached the system. Swallowing the
     /// up then leaves Windows believing the key is held for the rest of the
     /// session: with a modifier, every later keystroke becomes a chord.
+    suppression: Suppression,
+}
+
+#[derive(Default)]
+struct Suppression {
     owns_key_up: bool,
+}
+
+impl Suppression {
+    fn begin(&mut self, suppress: bool, system_was_down: bool) {
+        // A repeat can be the first event after startup or a focus change.
+        // Swallowing it does not undo the down Windows already received.
+        self.owns_key_up = suppress && !system_was_down;
+    }
+
+    fn release(&mut self, system_was_down: bool) -> bool {
+        // Even an owned press can have leaked a down while our hook could not
+        // see input. Always let Windows release a key it believes is held.
+        std::mem::take(&mut self.owns_key_up) && !system_was_down
+    }
 }
 
 thread_local! {
@@ -110,7 +129,7 @@ pub fn install(virtual_key: i32, suppress: bool, ignore_injected: bool, notify: 
             repeat_seen: false,
             last_key_down: Instant::now(),
             pressed_at: Instant::now(),
-            owns_key_up: false,
+            suppression: Suppression::default(),
         });
     });
 
@@ -205,6 +224,10 @@ fn handle(code: i32, wparam: WPARAM, lparam: LPARAM) -> bool {
         }
 
         let message = wparam as u32;
+        // The low-level callback runs BEFORE Windows updates async state for
+        // this event. Here we need that prior state, not the physical state of
+        // the incoming event: did Windows already receive a down?
+        let system_was_down = (unsafe { GetAsyncKeyState(hook.virtual_key as i32) } as u16 & 0x8000) != 0;
 
         if message == WM_KEYDOWN || message == WM_SYSKEYDOWN {
             // Stamped for every down-event including auto-repeat, because the
@@ -226,23 +249,23 @@ fn handle(code: i32, wparam: WPARAM, lparam: LPARAM) -> bool {
 
                 hook.is_down = true;
                 hook.repeat_seen = false;
-                hook.owns_key_up = hook.suppress;
+                hook.suppression.begin(hook.suppress, system_was_down);
                 hook.pressed_at = Instant::now();
                 hook.notify.post(WM_HOTKEY_DOWN, origin, 0);
             }
         } else if message == WM_KEYUP || message == WM_SYSKEYUP {
-            let owned = hook.owns_key_up;
-            hook.owns_key_up = false;
+            let swallow = hook.suppression.release(system_was_down);
 
             if hook.is_down {
                 hook.is_down = false;
                 hook.notify.post(WM_HOTKEY_UP, RELEASE_KEY_UP, 0);
             }
 
-            return owned;
+            return swallow;
         }
 
-        hook.suppress
+        // Repeats of a passed-through press must also pass through.
+        hook.suppression.owns_key_up
     })
 }
 
@@ -277,4 +300,45 @@ pub fn reconcile() {
         hook.is_down = false;
         hook.notify.post(WM_HOTKEY_UP, RELEASE_RECONCILED, 0);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Suppression;
+
+    #[test]
+    fn suppressed_press_owns_its_release() {
+        let mut state = Suppression::default();
+        state.begin(true, false);
+        assert!(state.owns_key_up);
+        assert!(state.release(false));
+        assert!(!state.release(false));
+    }
+
+    #[test]
+    fn first_seen_repeat_cannot_own_a_release() {
+        let mut state = Suppression::default();
+        state.begin(true, true);
+        assert!(!state.owns_key_up);
+        assert!(!state.release(true));
+    }
+
+    #[test]
+    fn leaked_down_always_gets_a_release() {
+        let mut state = Suppression::default();
+        state.begin(true, false);
+        assert!(!state.release(true));
+        assert!(!state.owns_key_up);
+        state.begin(true, false);
+        assert!(state.release(false));
+    }
+
+    #[test]
+    fn unowned_and_unsuppressed_releases_pass_through() {
+        let mut state = Suppression::default();
+        assert!(!state.release(true));
+        state.begin(false, false);
+        assert!(!state.owns_key_up);
+        assert!(!state.release(true));
+    }
 }

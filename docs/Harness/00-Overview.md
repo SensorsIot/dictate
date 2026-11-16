@@ -13,29 +13,30 @@ design — what the system must do — is in the [FSD](../Functionality/dictate_
 |---|---|---|
 | Rust, raw Win32 through `windows-sys` | C# / .NET · Python · Electron | The application is Win32 interop plus a few HTTP calls. Rust does both with no runtime: one ~4 MB exe, about 22 MB in memory, nothing to install, and no SDK whose surface can drift under a CI-only build. Python is weakest exactly here — `ctypes` structs, hook wrappers, packagers that trip antivirus. `windows-sys` rather than the `windows` crate: plain C signatures, checkable against the Win32 documentation without a compiler. |
 | `dictate-core` + `dictate-windows` in one Cargo workspace | A single crate · two repositories | Keeps the whole testable half runnable on a Linux CI runner, without two release cycles for a one-user tool. |
-| Builds only in GitHub Actions | A local toolchain | Deliberate, with the round-trip cost accepted. See §1 — it shapes how you work here more than anything else. |
+| CI builds on every supported platform, with local checks when a toolchain is present | Requiring a compiler on destination PCs | CI produces portable artifacts. Local Rust/Python checks shorten development feedback; installation uses the executable and the optional Python runtime only. |
 | winmm (`waveIn`) for capture | WASAPI | winmm converts to 16 kHz mono for us. WASAPI shared mode returns the device's own mix format — 48 kHz stereo float — and would need a resampler in the hot path for no quality gain at this bitrate. |
 | One capture thread owns each device, opened off the UI thread | Opening and closing on the UI thread | The UI thread also runs the keyboard hook. Opening a device can block for a second while a previous one closes, and Windows skips a hook that does not answer within LowLevelHooksTimeout — the key-up then reaches the system and the Start menu opens. |
 | Messages posted to one window, state in a thread-local | Shared state behind locks | The hook, the capture threads and the pipeline worker never touch session state; they post to the main window and the work happens on the next pump. Anything that runs a modal loop — tray menu, key dialog, message box — is called with the state released, because it re-enters the window procedure. |
 | No audio cues | Synthesised tones | A second audio device costs more than the tones are worth: an idle output endpoint takes seconds to spin up, and opening it stalls capture. The overlay says the same thing instantly. |
 | An opt-in diagnostic log, metadata only | No log at all | Without it, diagnosing a shipped binary from another machine means reconstructing behaviour from Windows event logs, where a silent exit and a deliberate quit look identical. It records timings and counters, never dictated text, so FR-17.1 still holds. |
 | Plain HTTP for every API | The Anthropic SDK · an OpenAI client crate for Infomaniak | There is no official Rust SDK, and a handful of small JSON requests cost less to own than a client surface to track. Every request body and response parser is a pure function with host tests. |
-| Providers chosen in `config.json`, wired in one function (`providers::build`) | A plugin registry · a crate per provider | Two providers per step. `build` is the only place that maps the configuration to a `Transcriber`, a `Cleaner` and the keys they need, so the heads and the pipeline never name a provider. When both steps use Infomaniak they share one account, so the product id is looked up once. |
+| Providers chosen in `config.json`, wired in one function (`providers::build`) | A plugin registry · a crate per provider | `build` maps configuration to a `Transcriber`, a `Cleaner` and optional credentials. LocalWhisper needs no cloud credential; `None` cleanup selects passthrough. When both steps use Infomaniak they share one account. |
+| An optional resident Python service for local Whisper | Loading a model for every utterance · GPU dependencies in the tray executable | `local-whisper/server.py` reads Dictate's JSON5 config, loads the selected faster-whisper model once, and accepts in-memory multipart WAV over IPv4 loopback. The Rust client bypasses proxies and rejects redirects. The service binds only to loopback, suppresses request logs, and serializes inference. Runtime installation and service startup are explicit user operations. |
+| A general per-user Windows installer and a thin laptop preset | Machine-specific deployment scripts | `install-windows.ps1` owns backups, runtime/model validation, configuration and limited interactive tasks. `install-hp-laptop.ps1` only supplies documented CPU/small/Caps Lock arguments. The tested Windows runtime pins faster-whisper, CTranslate2 and PyAV; each installation records resolved dependencies. The setup helper merges JSON5 configuration case-insensitively and writes it only after the model loads. |
 | Infomaniak transcription polled on the pipeline worker | Infomaniak's synchronous v2 endpoint | Infomaniak transcribes only through its asynchronous v1 API: an upload returns a batch id, and the result is polled. Each poll costs a round trip of about a second, which is most of the 3–4 s it takes. It runs on the worker thread, so the UI thread never waits. |
 | A short Caps Lock press swallowed, then replayed with `SendInput` at release | Letting the key-down through and swallowing only long presses | At key-down nobody knows how long the press will be, and a key-down that has reached the system cannot be withdrawn. The replay carries the injection stamp, so the hook ignores its own keystroke. It is sent before the session ends, because ending it closes the capture device first, which delays the toggle by half a second. Windows only: the Mac hotkey is never swallowed (FR-22.2). |
 | Batch upload | Streaming transcription | Correctness first, then measure. `Transcriber` is the seam a streaming backend drops into without touching the pipeline. |
 
-## 1. The constraint that shapes everything
+## 1. Build and verification
 
-**There is no Rust toolchain on any development machine.** This is deliberate (see §0) and it has consequences
-you will feel within ten minutes:
+Check for a local toolchain instead of assuming it is absent. When available,
+run `cargo test --workspace --all-targets --locked` and
+`python -m unittest discover -s local-whisper -p 'test_*.py'` before pushing.
+On Windows, `cargo build -p dictate-windows --release --locked` produces the
+executable for a desktop test. Destination PCs need no Rust compiler.
 
-- `cargo build`, `cargo test` and `cargo run` do not exist locally.
-- A compile error is discovered by GitHub Actions, roughly 3–5 minutes after you
-  push.
-- No rust-analyzer: syntax highlighting, no type checking.
-
-Two habits follow, and they are not optional here:
+CI still builds and tests the supported platforms; a local Windows run does
+not verify macOS behavior. Two habits apply:
 
 1. **Prefer API shapes you can verify from documentation over ones you
    half-remember.** A guessed signature costs a full CI round trip. Where a
@@ -138,8 +139,7 @@ that reads finished while nothing is verified.
 - No `unwrap()` on anything that can fail at runtime in the Windows head; a
   panic there costs the user's session. Window procedures and the hook catch
   panics at the boundary so none unwinds into user32.
-- Warnings are not promoted to errors — with CI-only builds a promoted warning
-  costs a round trip to discover — but the build is kept at zero warnings.
+- Warnings are not promoted to errors, but the build is kept at zero warnings.
 - Comments explain constraints the code cannot show — why `dwExtraInfo` is
   stamped, why the device opens off the UI thread, why cleanup has no
   `cache_control`. They do not narrate the next line.

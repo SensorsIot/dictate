@@ -90,12 +90,14 @@ tray or menu-bar menu if you switched provider.
 
 ### Speech-to-text and cleanup
 
-Each step has two providers. The two steps can be mixed.
+The two steps can be mixed. Local Whisper also supports speech-to-text entirely
+on your computer; cleanup can be disabled for fully local use.
 
 | | Speech-to-text | Cleanup (LLM) | Key |
 |---|---|---|---|
 | **Default** | ElevenLabs Scribe (`scribe_v2`) | Anthropic Claude Haiku 4.5 | One ElevenLabs key, one Anthropic key |
 | **Swiss** | Infomaniak Whisper (`whisper`) | Infomaniak Gemma 4 31B | One Infomaniak token for both |
+| **Local** | Whisper (`turbo`, configurable) | Disabled with `CleanupProvider: None` | No API keys; optional local runtime required |
 
 Default: fastest, under 1 s to transcribe, and the best on German and English
 mixed in one sentence. You don't need a `config.json` for it.
@@ -118,6 +120,32 @@ Swiss: audio and text are processed in Switzerland. Transcription takes about
 ```
 
 `TranscriptionModel` and `CleanupModel` override the model names.
+
+For local speech-to-text, select the model in the same `config.json`:
+
+```json
+{
+  "TranscriptionProvider": "LocalWhisper",
+  "TranscriptionModel": "turbo",
+  "CleanupProvider": "None",
+  "Language": "Auto"
+}
+```
+
+Models include `tiny`, `base`, `small`, `medium`, `large-v1`, `large-v2`,
+`large-v3`, and `turbo`; the first four also have English-only `.en` variants.
+The separately started service reads this configuration and keeps the selected
+model loaded. Restart it and dictate after changing models. See
+[local Whisper setup](docs/UserDocumentation/Manual.md#7-local-whisper-speech-to-text)
+for installation, GPU requirements, and startup commands.
+
+For another Windows PC or laptop, use the
+[general installation guide](docs/UserDocumentation/Windows-Installation.md)
+and [Windows installer](local-whisper/install-windows.ps1). It supports CPU/GPU
+selection, model downloads, backups and optional login startup. An optional
+[HP laptop profile](local-whisper/install-hp-laptop.ps1) chooses CPU `small`
+and Caps Lock; it calls the same installer. No Rust build is needed on the PC
+being installed.
 
 ### The start key
 
@@ -211,9 +239,9 @@ rest.
 
 ## Status
 
-Working and in daily use. 120 automated tests, all passing; the pipeline,
-latency, memory behaviour and delivery paths are measured on real
-hardware.
+Working and in daily use. Automated Rust and Python tests cover the pipeline,
+local service and installer configuration. Latency, memory behaviour and
+delivery paths are measured on real hardware.
 
 Honest about what that does *not* cover: the desktop-tier tests are run by hand,
 because a hotkey, a microphone and a foreground window are things no CI runner

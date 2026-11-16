@@ -1,0 +1,5 @@
+# Windows versions exercised by the installer and the CPU/GPU smoke tests.
+-r requirements.txt
+faster-whisper==1.2.1
+ctranslate2==4.9.0
+av==18.1.0

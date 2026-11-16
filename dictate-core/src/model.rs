@@ -101,15 +101,18 @@ pub enum TranscriptionProvider {
     /// Infomaniak AI Services (Whisper), hosted in Switzerland. Slower: the
     /// API is asynchronous, so every utterance waits on a result poll.
     Infomaniak,
+    /// Whisper running on this computer, without a cloud credential.
+    LocalWhisper,
 }
 
-named_enum!(TranscriptionProvider { ElevenLabs, Infomaniak });
+named_enum!(TranscriptionProvider { ElevenLabs, Infomaniak, LocalWhisper });
 
 impl TranscriptionProvider {
-    pub fn credential(self) -> Credential {
+    pub fn credential(self) -> Option<Credential> {
         match self {
-            TranscriptionProvider::ElevenLabs => Credential::ElevenLabs,
-            TranscriptionProvider::Infomaniak => Credential::Infomaniak,
+            TranscriptionProvider::ElevenLabs => Some(Credential::ElevenLabs),
+            TranscriptionProvider::Infomaniak => Some(Credential::Infomaniak),
+            TranscriptionProvider::LocalWhisper => None,
         }
     }
 
@@ -118,6 +121,7 @@ impl TranscriptionProvider {
         match self {
             TranscriptionProvider::ElevenLabs => "scribe_v2",
             TranscriptionProvider::Infomaniak => "whisper",
+            TranscriptionProvider::LocalWhisper => "turbo",
         }
     }
 }
@@ -130,15 +134,18 @@ pub enum CleanupProvider {
     Anthropic,
     /// Infomaniak AI Services, an OpenAI-compatible API hosted in Switzerland.
     Infomaniak,
+    /// Deliver the transcript without calling a cleanup service.
+    None,
 }
 
-named_enum!(CleanupProvider { Anthropic, Infomaniak });
+named_enum!(CleanupProvider { Anthropic, Infomaniak, None });
 
 impl CleanupProvider {
-    pub fn credential(self) -> Credential {
+    pub fn credential(self) -> Option<Credential> {
         match self {
-            CleanupProvider::Anthropic => Credential::Anthropic,
-            CleanupProvider::Infomaniak => Credential::Infomaniak,
+            CleanupProvider::Anthropic => Some(Credential::Anthropic),
+            CleanupProvider::Infomaniak => Some(Credential::Infomaniak),
+            CleanupProvider::None => None,
         }
     }
 
@@ -149,6 +156,7 @@ impl CleanupProvider {
         match self {
             CleanupProvider::Anthropic => "claude-haiku-4-5",
             CleanupProvider::Infomaniak => "google/gemma-4-31B-it",
+            CleanupProvider::None => "",
         }
     }
 }

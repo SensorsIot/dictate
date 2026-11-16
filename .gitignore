@@ -12,3 +12,7 @@ target/
 # Local config / scratch
 *.local.json
 scratch/
+
+# Optional local Whisper runtime
+.venv-whisper/
+__pycache__/

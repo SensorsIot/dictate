@@ -23,42 +23,32 @@ pub fn prompt() -> bool {
     let transcription = config.transcription_provider.credential();
     let cleanup = config.cleanup_provider.credential();
 
-    let Some(key) = ask(
-        &format!("{transcription} API key (required).\n\nStored in your login Keychain, never in a file."),
-        true,
-    ) else {
-        return false;
-    };
-    if key.is_empty() {
-        alert(&format!("dictate needs a {transcription} key to transcribe. Nothing was stored."));
-        return false;
-    }
-
-    // Asked only when cleanup uses a different provider's key.
-    let cleanup_key = (cleanup != transcription).then(|| {
-        ask(
-            &format!(
-                "{cleanup} API key (optional).\n\nWithout it, dictate types the transcript verbatim, without cleanup. \
-                 Leave empty to skip."
-            ),
-            false,
-        )
-        .unwrap_or_default()
-    });
-
-    if let Err(error) = credentials::write(credentials::account(transcription), &key) {
-        alert(&error);
-        return false;
-    }
-
-    match cleanup_key {
-        None => {}
-        Some(value) if value.is_empty() => credentials::delete(credentials::account(cleanup)),
-        Some(value) => {
-            if let Err(error) = credentials::write(credentials::account(cleanup), &value) {
-                alert(&error);
-            }
+    if let Some(transcription) = transcription {
+        let Some(key) = ask(
+            &format!("{transcription} API key (required).\n\nStored in your login Keychain, never in a file."),
+            true,
+        ) else { return false; };
+        if key.is_empty() {
+            alert(&format!("dictate needs a {transcription} key to transcribe. Nothing was stored."));
+            return false;
         }
+        if let Err(error) = credentials::write(credentials::account(transcription), &key) {
+            alert(&error);
+            return false;
+        }
+    }
+    if let Some(cleanup) = cleanup.filter(|c| Some(*c) != transcription) {
+        let Some(value) = ask(
+            &format!("{cleanup} API key (optional). Leave empty to dictate without cleanup."), false,
+        ) else { return true; };
+        if value.is_empty() {
+            credentials::delete(credentials::account(cleanup));
+        } else if let Err(error) = credentials::write(credentials::account(cleanup), &value) {
+            alert(&error);
+            return false;
+        }
+    } else if transcription.is_none() {
+        alert("Local Whisper with cleanup disabled needs no API keys.");
     }
 
     true

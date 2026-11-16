@@ -45,7 +45,7 @@ const COLOR_GRAYTEXT: i32 = 17;
 thread_local! {
     static OUTCOME: Cell<Option<bool>> = const { Cell::new(None) };
     static OPEN: Cell<bool> = const { Cell::new(false) };
-    static KEYS: Cell<(Credential, Option<Credential>)> = const { Cell::new((Credential::ElevenLabs, None)) };
+    static KEYS: Cell<(Option<Credential>, Option<Credential>)> = const { Cell::new((Some(Credential::ElevenLabs), None)) };
 }
 
 /// Shows the dialog and runs its loop. Returns true if keys were saved.
@@ -140,19 +140,20 @@ unsafe fn run() -> bool {
 
     let (transcription, cleanup) = configured_keys();
     KEYS.with(|keys| keys.set((transcription, cleanup)));
-    let existing_transcription = credentials::read(credentials::target(transcription)).unwrap_or_default();
+    let existing_transcription = transcription.and_then(|c| credentials::read(credentials::target(c))).unwrap_or_default();
 
     control(
         "STATIC",
         "Keys are stored in Windows Credential Manager, encrypted under your\nWindows account. They are never written to a file.",
         0, 0, 12, 12, 436, 34, 0,
     );
-    control("STATIC", &format!("{transcription} key"), 0, 0, 12, 58, 120, 20, 0);
+    let label = transcription.map_or("Local Whisper".to_owned(), |c| format!("{c} key"));
+    control("STATIC", &label, 0, 0, 12, 58, 120, 20, 0);
     let first = control(
-        "EDIT",
-        &existing_transcription,
-        WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL,
-        WS_EX_CLIENTEDGE,
+        if transcription.is_some() { "EDIT" } else { "STATIC" },
+        if transcription.is_some() { &existing_transcription } else { "Runs locally; no transcription key needed." },
+        if transcription.is_some() { WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL } else { 0 },
+        if transcription.is_some() { WS_EX_CLIENTEDGE } else { 0 },
         140, 55, 300, 23, ID_TRANSCRIPTION,
     );
     match cleanup {
@@ -170,7 +171,10 @@ unsafe fn run() -> bool {
             control("STATIC", &note, 0, 0, 140, 116, 300, 20, ID_NOTE);
         }
         None => {
-            let note = format!("Cleanup uses the same {transcription} key.");
+            let note = match transcription {
+                Some(c) if DictateConfig::load(&paths::config_file()).unwrap_or_default().cleanup_provider.credential() == Some(c) => format!("Cleanup uses the same {c} key."),
+                _ => "No cleanup key is needed with the current settings.".to_owned(),
+            };
             control("STATIC", &note, 0, 0, 140, 89, 300, 20, ID_NOTE);
         }
     }
@@ -179,7 +183,9 @@ unsafe fn run() -> bool {
 
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
-    SetFocus(first);
+    SetFocus(if transcription.is_some() { first } else if cleanup.is_some() {
+        GetDlgItem(hwnd, ID_CLEANUP)
+    } else { GetDlgItem(hwnd, ID_SAVE) });
 
     let mut message: MSG = zeroed();
     let saved = loop {
@@ -223,24 +229,24 @@ unsafe fn text_of(control: HWND) -> String {
 /// The transcription provider's key, and the cleanup provider's when it is a
 /// different one. A config file that does not parse is reported at startup;
 /// here it only means asking for the default providers' keys.
-fn configured_keys() -> (Credential, Option<Credential>) {
+fn configured_keys() -> (Option<Credential>, Option<Credential>) {
     let config = DictateConfig::load(&paths::config_file()).unwrap_or_default();
     let transcription = config.transcription_provider.credential();
     let cleanup = config.cleanup_provider.credential();
-    (transcription, (cleanup != transcription).then_some(cleanup))
+    (transcription, cleanup.filter(|c| Some(*c) != transcription))
 }
 
 unsafe fn save(hwnd: HWND) {
     let (transcription, cleanup) = KEYS.with(Cell::get);
     let key = text_of(GetDlgItem(hwnd, ID_TRANSCRIPTION)).trim().to_owned();
 
-    if key.is_empty() {
+    if let Some(transcription) = transcription.filter(|_| key.is_empty()) {
         let warning = format!("A {transcription} key is required — without it there is nothing to transcribe with.");
         message_box(hwnd, &warning, MB_ICONWARNING);
         return;
     }
 
-    let stored = credentials::write(credentials::target(transcription), &key).and_then(|()| {
+    let stored = transcription.map_or(Ok(()), |c| credentials::write(credentials::target(c), &key)).and_then(|()| {
         // Only when the cleanup key has a field of its own: reading a missing
         // field yields "", which would delete the shared key just written.
         let Some(cleanup) = cleanup else {

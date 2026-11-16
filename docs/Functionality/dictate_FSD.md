@@ -59,8 +59,8 @@ language, project split, build strategy, audio stack — is in
 | Uses | Not used | Why |
 |---|---|---|
 | Windows 11 and macOS clients, one shared core | A Linux desktop · a service on the dev VM | The hotkey, the microphone and the target window all live on the desktop the user types at. A container on a headless VM has none of the three. Everything above the operating system is shared (§2.3), so both clients behave the same; Part F lists where macOS differs. |
-| ElevenLabs Scribe, Infomaniak Whisper as the alternative | Local faster-whisper · Groq · Deepgram | A stated requirement (FR-10.1). The dev VM has 4 vCPUs and no GPU, so a local model there is not viable. Infomaniak keeps audio in Switzerland, at a latency cost (FR-10.7). |
-| Claude Haiku 4.5 for cleanup, Infomaniak as the alternative | Gemini Flash · no cleanup at all | Same latency and cost class for a short cleanup pass. Infomaniak processes the text in Switzerland (FR-11.1). |
+| Configurable cloud or local transcription | A mandatory cloud service | LocalWhisper processes audio on the computer when its runtime is installed. Cloud providers remain available for machines without a local runtime (FR-10.9). |
+| Optional Claude Haiku 4.5 or Infomaniak cleanup | Mandatory cloud cleanup | Cleanup can be disabled explicitly, including when cloud credentials are stored, so local transcription can remain fully local (FR-11.14). |
 | Push-to-talk, hold | Toggle · toggle with silence auto-stop | Key release is an unambiguous end-of-utterance signal. No VAD, and no way to leave the microphone hot by accident. |
 | Synthetic typing (`SendInput`) | Clipboard paste with restore · clipboard only | Works in terminals and over RDP without a per-application paste chord, and does not clobber the clipboard as a side effect of delivery. |
 | German + English, auto with a pin | English only · full auto with no override | The user's work mixes both in one sentence, and auto-detection misfires on short utterances. |
@@ -175,7 +175,7 @@ exist.
 | R-04 | Audio of everything spoken accumulates on disk | A laptop theft becomes a recording leak | FR-17.1: no audio or transcript is ever written |
 | R-05 | An API key is readable on the machine | Account compromise | FR-15.1: DPAPI via Credential Manager, never a file |
 | R-06 | A third-party app mishandles synthetic keystrokes | Dictation appears broken in that app | Accepted — outside the §1.5 boundary. Per-app chunking (FR-12.3) is the escape hatch |
-| R-07 | CI-only builds mean compile errors surface late | Slow iteration | Accepted; see the Harness §0. Host tests keep the blast radius small |
+| R-07 | A platform-specific defect can escape checks on another OS | Broken release on the unchecked platform | Local checks plus CI builds for every supported platform; see Harness §1 |
 | R-08 | A provider changes a model identifier | Every utterance fails | FR-10.2 and FR-11.2 make every model configurable; FR-7.4 surfaces the API's own error text |
 
 ### 4.1 Explicitly out of scope
@@ -410,6 +410,9 @@ be interpreted as hotkey events.
 
 **FR-8.4** [Should] `[user]` The hotkey shall be suppressed by default, and a
 suppressed key-up shall be swallowed only if the matching key-down was.
+An auto-repeat first observed after startup does not establish ownership of
+the original key-down. If Windows already considers the key held, its release
+shall pass through even when dictate previously suppressed a down.
 
 > The default hotkey requires it: a Windows key released with nothing pressed in
 > between opens the Start menu, so a passed-through hotkey opens it on every
@@ -560,11 +563,12 @@ session's text shall not wait for the close.
 `TranscriptionProvider` selects: `ElevenLabs` (default), Scribe via
 `POST https://api.elevenlabs.io/v1/speech-to-text` authenticated with the
 `xi-api-key` header; or `Infomaniak`, Whisper through Infomaniak AI Services
-(FR-10.7). FR-10.3 to FR-10.6 describe Scribe.
+(FR-10.7); or `LocalWhisper`, on this computer (FR-10.9).
+FR-10.3 to FR-10.6 describe Scribe.
 
 **FR-10.2** [Must] `[user]` The transcription model shall be configurable as
 `TranscriptionModel`. Unset, it is `ScribeModelId` (default `scribe_v2`) for
-ElevenLabs and `whisper` for Infomaniak.
+ElevenLabs, `whisper` for Infomaniak, and `turbo` for LocalWhisper.
 
 > It stays configurable so a future Scribe generation is a settings change,
 > not a rebuild.
@@ -623,13 +627,40 @@ languages it knows, and a misdetection is delivered as transcribed.
 > trimmed; a response without `text` raises `TranscriptionException`. *Tier:* host
 > (`ScribeParseTests`).
 
+**FR-10.9** [Must] `[user]` `TranscriptionProvider: LocalWhisper` shall
+transcribe on this computer without a transcription key or cloud fallback.
+`TranscriptionModel` selects the local model: `tiny`, `tiny.en`, `base`,
+`base.en`, `small`, `small.en`, `medium`, `medium.en`, `large-v1`, `large-v2`,
+`large-v3`, or `turbo` (default). The local service reads the same config at
+startup and keeps that model loaded; changing models requires restarting the
+service and dictate. Requests shall use IPv4 loopback only, bypass proxies,
+refuse redirects, keep audio in memory, and use `LocalWhisperTimeoutSeconds`
+(default 60 s). `LocalWhisperPort` defaults to 8178. A pinned `Language` and
+`Vocabulary` shall reach the local model. Errors shall identify local setup,
+model mismatch, or timeout rather than advise buying credit or checking the
+internet. The service is started separately and requires its own model runtime.
+
+> **VC** — *Pre:* a loopback transcription fixture. *Stimulus:* select a local
+> model and submit WAV audio. *Expect:* model, language, vocabulary and audio
+> arrive unchanged; the parsed text and language return; no cloud credentials
+> are requested when cleanup is disabled. Redirects, invalid models and failed
+> responses are errors. *Tier:* host (H-29); Python service contract (H-30).
+> GPU recognition accuracy and latency require desktop verification (DT-LOCAL).
+
 ## 11. Cleanup
+
+**FR-11.14** [Must] `[derived]` `CleanupProvider: None` shall deliver the
+transcript without a cleanup request or credential lookup, even if cloud keys
+are stored. With `LocalWhisper` this permits fully local dictation. Existing
+Swiss spelling, console sanitisation and delivery safeguards still apply.
+
 
 **FR-11.1** [Must] `[user]` The raw transcript shall be cleaned before delivery
 by the provider `CleanupProvider` selects: `Anthropic` (default), Claude through
 the Anthropic Messages API; or `Infomaniak`, through the OpenAI-compatible
 `POST https://api.infomaniak.com/2/ai/{product}/openai/v1/chat/completions`,
-with `stream` false and `reasoning_effort` `none`.
+with `stream` false and `reasoning_effort` `none`. `None` disables cleanup
+(FR-11.14).
 
 **FR-11.2** [Must] `[derived]` The cleanup model identifier shall be configurable
 as `CleanupModel`. Unset, it is the provider's default: `claude-haiku-4-5` for
@@ -645,8 +676,9 @@ Anthropic, `google/gemma-4-31B-it` for Infomaniak.
 **FR-11.13** [Must] `[user]` Each provider's key shall be stored separately, and
 one Infomaniak key serves both transcription and cleanup. Switching provider
 shall neither need nor delete another provider's key. The key prompt asks for
-the transcription provider's key (required) and, if cleanup uses a different
-provider, its key (optional).
+the cloud transcription provider's key (required) and, if cleanup uses a different
+provider, its key (optional). LocalWhisper needs no transcription key; `None`
+cleanup needs no key.
 
 **FR-11.3** [Must] `[user]` Cleanup shall remove fillers and false starts, and add
 sentence punctuation and capitalisation.
@@ -817,6 +849,21 @@ Manager.
 > never starts twice; unticking removes both. Ticking it again after moving the
 > exe repairs the path. *Must not:* the check mark showing on while nothing
 > starts dictate, or off while something does. *Tier:* desktop.
+
+**FR-16.4** [Must] `[user]` A general Windows installation script shall install
+the local runtime for the current user, select a multilingual model and CPU or
+NVIDIA GPU execution, and provide optional login startup. It shall back up
+existing configuration/startup information and preserve microphone and hotkey
+settings unless a hotkey override is selected. Its default local setup shall
+use automatic language detection and no cloud cleanup. An optional laptop
+profile shall call the same installer with documented presets, without
+depending on a particular manufacturer or machine name.
+
+> **VC** — Run the general installer as a normal user, inspect backups and
+> installed configuration, verify service health and interactive app startup,
+> then submit a transcription request. Repeat the installation to exercise an
+> upgrade. Configuration preservation is checked by H-32; desktop installation
+> by DT-INSTALL.
 
 ## 17. Retention
 
@@ -1077,12 +1124,14 @@ macOS; **System Settings → General → Login Items** starts it at login.
 | `MaximumRecordingSeconds` | int | `120` | FR-5.3 |
 | `Language` | enum | `Auto` | FR-10.3, FR-10.8 |
 | `SwissSpelling` | bool | `true` | FR-11.11 |
-| `TranscriptionProvider` | enum | `ElevenLabs` (or `Infomaniak`) | FR-10.1 |
+| `TranscriptionProvider` | enum | `ElevenLabs` (or `Infomaniak`, `LocalWhisper`) | FR-10.1, FR-10.9 |
 | `TranscriptionModel` | string? | `null`: `ScribeModelId` / `whisper` | FR-10.2 |
 | `ScribeModelId` | string | `scribe_v2` | FR-10.2 |
-| `CleanupProvider` | enum | `Anthropic` (or `Infomaniak`) | FR-11.1 |
+| `CleanupProvider` | enum | `Anthropic` (or `Infomaniak`, `None`) | FR-11.1, FR-11.14 |
 | `InfomaniakProductId` | int? | `null`: the token's first product | FR-10.7 |
 | `CleanupModel` | string? | `null`: `claude-haiku-4-5` / `google/gemma-4-31B-it` | FR-11.2 |
+| `LocalWhisperPort` | int | `8178` | FR-10.9 |
+| `LocalWhisperTimeoutSeconds` | int | `60` | FR-10.9 |
 | `ScribeTimeoutSeconds` | int | `15` | FR-10.6 |
 | `CleanupTimeoutSeconds` | int | `10` | FR-11.9 |
 | `Vocabulary` | string[] | project terms | FR-11.6 |

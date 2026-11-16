@@ -11,6 +11,7 @@ pub enum Service {
     ElevenLabs,
     Anthropic,
     Infomaniak,
+    LocalWhisper,
 }
 
 impl Service {
@@ -19,6 +20,7 @@ impl Service {
             Service::ElevenLabs => "ElevenLabs",
             Service::Anthropic => "Anthropic",
             Service::Infomaniak => "Infomaniak",
+            Service::LocalWhisper => "Local Whisper",
         }
     }
 
@@ -28,6 +30,7 @@ impl Service {
             Service::ElevenLabs => "Top up or upgrade at elevenlabs.io → Subscription, or wait for the monthly reset.",
             Service::Anthropic => "Buy credit at platform.claude.com/spending.",
             Service::Infomaniak => "Top up AI Tools in the Infomaniak Manager.",
+            Service::LocalWhisper => "Local Whisper does not require credit.",
         }
     }
 }

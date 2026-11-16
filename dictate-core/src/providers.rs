@@ -10,6 +10,7 @@ use crate::error::Error;
 use crate::infomaniak::{InfomaniakAccount, InfomaniakCleaner, InfomaniakTranscriber};
 use crate::model::{CleanupProvider, Credential, TranscriptionProvider};
 use crate::scribe::{ScribeTranscriber, Transcriber};
+use crate::local_whisper::LocalWhisperTranscriber;
 
 /// `key` reads a stored credential. The transcription provider's key is
 /// required; the cleanup provider's is not — without it dictation still works,
@@ -29,8 +30,10 @@ pub fn build(
         Ok(created)
     };
 
-    let credential = config.transcription_provider.credential();
-    let token = key(credential).ok_or_else(|| Error::new(format!("No {credential} key is stored.")))?;
+    let token = match config.transcription_provider.credential() {
+        Some(credential) => key(credential).ok_or_else(|| Error::new(format!("No {credential} key is stored.")))?,
+        None => String::new(),
+    };
     let transcriber: Box<dyn Transcriber> = match config.transcription_provider {
         TranscriptionProvider::ElevenLabs => {
             // Belt to the pipeline's braces: this bounds the socket.
@@ -38,13 +41,15 @@ pub fn build(
             Box::new(ScribeTranscriber::new(token, config.effective_transcription_model(), timeout)?)
         }
         TranscriptionProvider::Infomaniak => Box::new(InfomaniakTranscriber::new(account(token)?, config)),
+        TranscriptionProvider::LocalWhisper => Box::new(LocalWhisperTranscriber::new(config)?),
     };
 
-    let cleaner: Box<dyn Cleaner> = match key(config.cleanup_provider.credential()) {
+    let cleaner: Box<dyn Cleaner> = match config.cleanup_provider.credential().and_then(&key) {
         None => Box::new(PassthroughCleaner),
         Some(token) => match config.cleanup_provider {
             CleanupProvider::Anthropic => Box::new(HaikuCleaner::new(token, config)?),
             CleanupProvider::Infomaniak => Box::new(InfomaniakCleaner::new(account(token)?, config)),
+            CleanupProvider::None => Box::new(PassthroughCleaner),
         },
     };
 

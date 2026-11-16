@@ -37,6 +37,13 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-targets --locked
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test local Whisper service contract (no model download)
+        run: python -m unittest discover -s local-whisper -p 'test_*.py'
+
   windows:
     name: Windows build
     runs-on: windows-latest
@@ -48,9 +55,9 @@ jobs:
       - name: Build
         run: cargo build --release -p dictate-windows --locked
 
-      # The core again, on the platform it ships on.
-      - name: Test core
-        run: cargo test -p dictate-core --locked
+      # Includes the Windows hotkey/injection regression tests.
+      - name: Test workspace
+        run: cargo test --workspace --all-targets --locked
 
       # Every push to main leaves a runnable exe, so a fix can be tried on the
       # desktop without cutting a release.

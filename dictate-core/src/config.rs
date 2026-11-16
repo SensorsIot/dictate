@@ -53,6 +53,9 @@ pub struct DictateConfig {
     pub transcription_provider: TranscriptionProvider,
     /// None means the provider's default; for ElevenLabs that is `ScribeModelId`.
     pub transcription_model: Option<String>,
+    /// IPv4 loopback port of the separately started local Whisper service.
+    pub local_whisper_port: u16,
+    pub local_whisper_timeout_seconds: i32,
     /// The ElevenLabs model. Kept from before providers existed, so existing
     /// files keep working; `TranscriptionModel` overrides it.
     pub scribe_model_id: String,
@@ -95,6 +98,8 @@ impl Default for DictateConfig {
             swiss_spelling: true,
             transcription_provider: TranscriptionProvider::ElevenLabs,
             transcription_model: None,
+            local_whisper_port: 8178,
+            local_whisper_timeout_seconds: 60,
             scribe_model_id: "scribe_v2".into(),
             cleanup_provider: CleanupProvider::Anthropic,
             cleanup_model: None,

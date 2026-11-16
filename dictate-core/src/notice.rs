@@ -31,6 +31,15 @@ const TYPED_AS_SPOKEN: &str = "Your words were typed as spoken, without cleanup.
 
 /// Transcription failed: the words are gone, so the advice ends in dictating again.
 pub fn transcription_failed(error: &Error) -> Notice {
+    if error.service() == Some(Service::LocalWhisper) {
+        let action = match error.kind() {
+            ErrorKind::Unreachable => "Start the local Whisper service and check LocalWhisperPort in config.json.",
+            ErrorKind::TimedOut => "Try a smaller local model or increase LocalWhisperTimeoutSeconds in config.json.",
+            ErrorKind::Rejected => "Check TranscriptionModel in config.json, then restart the local Whisper service and dictate.",
+            _ => "Check the local Whisper service window for model or GPU errors, then dictate again.",
+        };
+        return Notice::new("Local Whisper failed", format!("{NOT_TRANSCRIBED} {action}"));
+    }
     let name = error.service().map_or("The transcription service", Service::name);
     let action = match error.kind() {
         ErrorKind::Overloaded | ErrorKind::ServerFault => {
